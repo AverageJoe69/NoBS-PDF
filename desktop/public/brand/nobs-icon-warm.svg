@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="180" fill="#1C1C1C"/>
+  <g fill="#E8DFCD" font-family="Inter, SF Pro Display, Helvetica Neue, Arial, sans-serif" font-weight="800" text-anchor="middle">
+    <text x="512" y="470" font-size="300" letter-spacing="-18">No</text>
+    <text x="512" y="760" font-size="300" letter-spacing="-18">BS</text>
+  </g>
+</svg>

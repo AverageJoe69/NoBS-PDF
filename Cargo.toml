@@ -1,0 +1,34 @@
+[package]
+name = "pdfdoctor"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "Read-only PDF inspection engine for NoBS PDF"
+
+[lib]
+name = "pdfdoctor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pdfdoctor"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "=4.5.23", features = ["derive"] }
+lopdf = "=0.36.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+time = "=0.3.47"
+indexmap = "=2.7.0"
+image = { version = "=0.24.9", default-features = false, features = ["jpeg"] }
+jpeg-decoder = "=0.3.2"
+jpeg-encoder = "=0.6.1"
+flate2 = "1"
+pdfium-render = { version = "=0.8.35", default-features = false, features = ["pdfium_7350", "image_024", "thread_safe"] }
+libloading = "=0.8.6"
+tempfile = "=3.14.0"
+
+[dev-dependencies]

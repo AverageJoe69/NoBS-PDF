@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "resources": {
+      "../../vendor/pdfium/lib/libpdfium.dylib": "libpdfium.dylib"
+    },
+    "macOS": {
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "10.13"
+    }
+  }
+}

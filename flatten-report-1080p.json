@@ -1,0 +1,170 @@
+{
+  "schema_version": "0.1.0",
+  "dry_run": false,
+  "mode": "full_page_raster",
+  "input_path": "tests/MT_AngelRaise_01.pdf",
+  "output_path": "tests/MT_AngelRaise_01_flattened_1080p.pdf",
+  "document_target": "1080p",
+  "long_dimension_px": 1920,
+  "pages": [
+    {
+      "page_number": 1,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 7,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": 2.7039623521090537
+    },
+    {
+      "page_number": 2,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 24,
+      "original_vector_operations": 26,
+      "annotations_preserved": true,
+      "mean_render_error": 2.616092142489712
+    },
+    {
+      "page_number": 3,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 39,
+      "original_vector_operations": 13,
+      "annotations_preserved": true,
+      "mean_render_error": 2.4549737975823045
+    },
+    {
+      "page_number": 4,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 14,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": 3.6335243055555555
+    },
+    {
+      "page_number": 5,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 69,
+      "original_vector_operations": 28,
+      "annotations_preserved": true,
+      "mean_render_error": 2.72727366255144
+    },
+    {
+      "page_number": 6,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 43,
+      "original_vector_operations": 12,
+      "annotations_preserved": true,
+      "mean_render_error": 2.0282855902777777
+    },
+    {
+      "page_number": 7,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 94,
+      "original_vector_operations": 18,
+      "annotations_preserved": true,
+      "mean_render_error": 4.759586709104938
+    },
+    {
+      "page_number": 8,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 7,
+      "original_vector_operations": 3,
+      "annotations_preserved": true,
+      "mean_render_error": 2.70294045781893
+    },
+    {
+      "page_number": 9,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 23,
+      "original_vector_operations": 8,
+      "annotations_preserved": true,
+      "mean_render_error": 2.421650591563786
+    },
+    {
+      "page_number": 10,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 51,
+      "original_vector_operations": 7,
+      "annotations_preserved": true,
+      "mean_render_error": 2.633646154835391
+    },
+    {
+      "page_number": 11,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 54,
+      "original_vector_operations": 20,
+      "annotations_preserved": true,
+      "mean_render_error": 3.0202671682098767
+    },
+    {
+      "page_number": 12,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 69,
+      "original_vector_operations": 72,
+      "annotations_preserved": true,
+      "mean_render_error": 2.694468235596708
+    },
+    {
+      "page_number": 13,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 96,
+      "original_vector_operations": 27,
+      "annotations_preserved": true,
+      "mean_render_error": 2.8038234632201644
+    },
+    {
+      "page_number": 14,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 22,
+      "original_vector_operations": 3,
+      "annotations_preserved": true,
+      "mean_render_error": 4.7491092785493825
+    },
+    {
+      "page_number": 15,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 33,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": 2.8333416923868313
+    }
+  ],
+  "original_size_bytes": 61002045,
+  "output_size_bytes": 11858548,
+  "saved_bytes": 49143497,
+  "source_sha256": "78ab94985e49bd7240432077cc0cc16ff3d558282ae5820c1b8134394150ab6d",
+  "output_sha256": "e7c9a7f7bcfa8bd60e58ecbc9a39ba7f2b8d97f53696e83ef312142f1dbabc7f",
+  "validation": {
+    "passed": true,
+    "page_count_preserved": true,
+    "page_boxes_preserved": true,
+    "page_rotation_preserved": true,
+    "annotations_preserved": true,
+    "exactly_one_page_image": true,
+    "render_comparison_passed": true,
+    "maximum_mean_render_error": 4.759586709104938
+  },
+  "destructive_changes": [
+    "Text is rasterised and is no longer selectable/searchable.",
+    "Vector artwork is rasterised and no longer resolution-independent.",
+    "Accessibility structure tied to page content may no longer function."
+  ],
+  "preserved": [
+    "Page boxes, dimensions, aspect ratios, page count, and rotation.",
+    "Annotation and link dictionaries; annotation appearances are not baked into page bitmaps."
+  ]
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <rect width="1200" height="360" fill="none"/>
+  <rect x="24" y="24" width="312" height="312" rx="64" fill="#1C1C1C"/>
+  <g fill="#F5F3EF" font-family="Inter, SF Pro Display, Helvetica Neue, Arial, sans-serif" font-weight="800" text-anchor="middle">
+    <text x="180" y="172" font-size="102" letter-spacing="-6">No</text>
+    <text x="180" y="272" font-size="102" letter-spacing="-6">BS</text>
+  </g>
+  <text x="392" y="165" fill="#1C1C1C" font-family="Inter, SF Pro Display, Helvetica Neue, Arial, sans-serif" font-weight="750" font-size="82" letter-spacing="-4">NoBS PDF</text>
+  <text x="395" y="225" fill="#6F6A64" font-family="Literata, Source Serif 4, Georgia, serif" font-style="italic" font-size="31">Intelligent PDF Optimisation</text>
+</svg>

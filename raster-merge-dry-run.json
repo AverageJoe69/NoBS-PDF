@@ -1,0 +1,136 @@
+{
+  "schema_version": "0.1.0",
+  "dry_run": true,
+  "input_path": "tests/MT_AngelRaise_01_1080p.pdf",
+  "output_path": null,
+  "target_profile": "1080p",
+  "target_long_dimension_px": 1920,
+  "pages": [
+    {
+      "page_number": 1,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 2,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 3,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 4,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "transparency_or_extgstate_not_supported"
+    },
+    {
+      "page_number": 5,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 6,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "transparency_or_extgstate_not_supported"
+    },
+    {
+      "page_number": 7,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 8,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 9,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 10,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 11,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 12,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 13,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 14,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    },
+    {
+      "page_number": 15,
+      "status": "skipped",
+      "raster_objects": 0,
+      "merged_bbox_pt": null,
+      "merged_pixels": null,
+      "skipped_reason": "unsupported_colour_space"
+    }
+  ],
+  "pages_merged": 0,
+  "pages_skipped": 15,
+  "original_size_bytes": 37744833,
+  "output_size_bytes": null,
+  "saved_bytes": null,
+  "validation_passed": null
+}

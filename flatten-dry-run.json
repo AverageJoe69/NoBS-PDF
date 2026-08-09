@@ -1,0 +1,161 @@
+{
+  "schema_version": "0.1.0",
+  "dry_run": true,
+  "mode": "full_page_raster",
+  "input_path": "tests/MT_AngelRaise_01.pdf",
+  "output_path": null,
+  "document_target": "1080p",
+  "long_dimension_px": 1920,
+  "pages": [
+    {
+      "page_number": 1,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 7,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 2,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 24,
+      "original_vector_operations": 26,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 3,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 39,
+      "original_vector_operations": 13,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 4,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 14,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 5,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 69,
+      "original_vector_operations": 28,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 6,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 43,
+      "original_vector_operations": 12,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 7,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 94,
+      "original_vector_operations": 18,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 8,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 7,
+      "original_vector_operations": 3,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 9,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 23,
+      "original_vector_operations": 8,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 10,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 51,
+      "original_vector_operations": 7,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 11,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 54,
+      "original_vector_operations": 20,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 12,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 69,
+      "original_vector_operations": 72,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 13,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 96,
+      "original_vector_operations": 27,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 14,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 22,
+      "original_vector_operations": 3,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    },
+    {
+      "page_number": 15,
+      "width_px": 1920,
+      "height_px": 1080,
+      "original_text_operations": 33,
+      "original_vector_operations": 10,
+      "annotations_preserved": true,
+      "mean_render_error": null
+    }
+  ],
+  "original_size_bytes": 61002045,
+  "output_size_bytes": null,
+  "saved_bytes": null,
+  "source_sha256": "78ab94985e49bd7240432077cc0cc16ff3d558282ae5820c1b8134394150ab6d",
+  "output_sha256": null,
+  "validation": null,
+  "destructive_changes": [
+    "Text is rasterised and is no longer selectable/searchable.",
+    "Vector artwork is rasterised and no longer resolution-independent.",
+    "Accessibility structure tied to page content may no longer function."
+  ],
+  "preserved": [
+    "Page boxes, dimensions, aspect ratios, page count, and rotation.",
+    "Annotation and link dictionaries; annotation appearances are not baked into page bitmaps."
+  ]
+}

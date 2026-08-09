@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nobspdf.example/schema/report-0.1.0.json",
+  "title": "NoBS PDF inspection report",
+  "type": "object",
+  "required": ["schema_version", "file", "summary", "pages", "images", "fonts", "embedded_files", "metadata", "warnings"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "file": { "type": "object", "required": ["path", "size_bytes", "page_count"] },
+    "summary": { "type": "object", "required": ["image_bytes", "font_bytes", "embedded_file_bytes", "metadata_bytes", "other_bytes", "unknown_bytes", "attribution"] },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+    "images": { "type": "array", "items": { "$ref": "#/$defs/image" } },
+    "fonts": { "type": "array" }, "embedded_files": { "type": "array" }, "metadata": { "type": "array" }, "warnings": { "type": "array" }
+  },
+  "$defs": {
+    "nullableNumber": { "type": ["number", "null"] },
+    "page": { "type": "object", "required": ["page_number", "width_pt", "height_pt", "width_mm", "height_mm", "rotation_degrees", "object_counts"] },
+    "image": {
+      "type": "object",
+      "required": ["id", "object_number", "generation", "pages", "placements", "pixel_width", "pixel_height", "encoded_bytes", "sha256", "same_object_reused", "identical_data_duplicate", "reference_count"],
+      "properties": {
+        "id": { "type": "string" }, "object_number": { "type": "integer" }, "generation": { "type": "integer" },
+        "pages": { "type": "array", "items": { "type": "integer" } }, "placements": { "type": "array" },
+        "pixel_width": { "type": "integer" }, "pixel_height": { "type": "integer" }, "encoded_bytes": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "same_object_reused": { "type": "boolean" },
+        "identical_data_duplicate": { "type": "boolean" }, "reference_count": { "type": "integer" }
+      }
+    }
+  }
+}

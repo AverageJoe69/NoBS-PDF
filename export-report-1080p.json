@@ -1,0 +1,1460 @@
+{
+  "schema_version": "0.1.0",
+  "dry_run": false,
+  "input": {
+    "path": "tests/MT_AngelRaise_01.pdf",
+    "size_bytes": 61002045,
+    "sha256": "78ab94985e49bd7240432077cc0cc16ff3d558282ae5820c1b8134394150ab6d"
+  },
+  "output": {
+    "path": "tests/MT_AngelRaise_01_1080p.pdf",
+    "size_bytes": 37744833,
+    "sha256": "8c63a5e3fd0bed8fbde99b88fb6f0aaedb73de15e96c338502dab0d3fcffbb80"
+  },
+  "document_target": {
+    "profile": "1080p",
+    "long_dimension_px": 1920
+  },
+  "images": {
+    "analysed": 108,
+    "candidates": 38,
+    "modified": 16,
+    "unchanged": 70,
+    "skipped": 22
+  },
+  "image_results": [
+    {
+      "object_id": "9 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        988,
+        927
+      ],
+      "target_pixels": null,
+      "original_bytes": 803950,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "15 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1996,
+        2483
+      ],
+      "target_pixels": null,
+      "original_bytes": 51046,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "21 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1996,
+        2483
+      ],
+      "target_pixels": null,
+      "original_bytes": 51046,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "22 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1996,
+        2483
+      ],
+      "target_pixels": [
+        871,
+        1083
+      ],
+      "original_bytes": 1703871,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "41 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1661,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "50 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        751,
+        175
+      ],
+      "target_pixels": null,
+      "original_bytes": 912,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "51 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        751,
+        175
+      ],
+      "target_pixels": [
+        181,
+        42
+      ],
+      "original_bytes": 30913,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "57 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        614,
+        913
+      ],
+      "target_pixels": null,
+      "original_bytes": 155707,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "60 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        719,
+        808
+      ],
+      "target_pixels": null,
+      "original_bytes": 156342,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "62 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        3676,
+        4217
+      ],
+      "target_pixels": null,
+      "original_bytes": 63160,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "63 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        3676,
+        4217
+      ],
+      "target_pixels": [
+        883,
+        1013
+      ],
+      "original_bytes": 1876495,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "64 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1538,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "65 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": [
+        349,
+        85
+      ],
+      "original_bytes": 7352,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "73 0 R",
+      "status": "modified",
+      "source_pixels": [
+        3389,
+        1969
+      ],
+      "target_pixels": [
+        1922,
+        1117
+      ],
+      "original_bytes": 8975079,
+      "output_bytes": 2591186,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "76 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        748,
+        1018
+      ],
+      "target_pixels": null,
+      "original_bytes": 250475,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "80 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1442,
+        1021
+      ],
+      "target_pixels": null,
+      "original_bytes": 540830,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "94 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1434,
+        1594
+      ],
+      "target_pixels": [
+        532,
+        591
+      ],
+      "original_bytes": 2156116,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "101 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2928,
+        2642
+      ],
+      "target_pixels": [
+        1125,
+        1015
+      ],
+      "original_bytes": 5999186,
+      "output_bytes": 2335123,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "123 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        2872,
+        443
+      ],
+      "target_pixels": null,
+      "original_bytes": 22733,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "127 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        2872,
+        443
+      ],
+      "target_pixels": null,
+      "original_bytes": 22733,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "128 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        2872,
+        443
+      ],
+      "target_pixels": [
+        690,
+        106
+      ],
+      "original_bytes": 22620,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "141 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1134,
+        977
+      ],
+      "target_pixels": null,
+      "original_bytes": 321668,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "144 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1494,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "145 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": [
+        349,
+        85
+      ],
+      "original_bytes": 7406,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "148 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1050,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1051,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "149 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1050,
+        297
+      ],
+      "target_pixels": [
+        336,
+        95
+      ],
+      "original_bytes": 6513,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "156 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2479,
+        1440
+      ],
+      "target_pixels": [
+        1922,
+        1116
+      ],
+      "original_bytes": 2409021,
+      "output_bytes": 1669167,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "159 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1264,
+        1073
+      ],
+      "target_pixels": null,
+      "original_bytes": 769348,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "161 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        882,
+        931
+      ],
+      "target_pixels": null,
+      "original_bytes": 375829,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "171 0 R",
+      "status": "modified",
+      "source_pixels": [
+        3983,
+        2177
+      ],
+      "target_pixels": [
+        1868,
+        1021
+      ],
+      "original_bytes": 258223,
+      "output_bytes": 145822,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "177 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        305,
+        344
+      ],
+      "target_pixels": null,
+      "original_bytes": 66346,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "179 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        990,
+        567
+      ],
+      "target_pixels": null,
+      "original_bytes": 25211,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "180 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        990,
+        567
+      ],
+      "target_pixels": [
+        238,
+        136
+      ],
+      "original_bytes": 91560,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "181 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        400,
+        400
+      ],
+      "target_pixels": null,
+      "original_bytes": 2821,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "182 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        400,
+        400
+      ],
+      "target_pixels": [
+        124,
+        124
+      ],
+      "original_bytes": 6438,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "188 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1672,
+        888
+      ],
+      "target_pixels": null,
+      "original_bytes": 511501,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "196 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        848
+      ],
+      "target_pixels": null,
+      "original_bytes": 859130,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "201 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2560,
+        1440
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 2481655,
+      "output_bytes": 1566154,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "204 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        2052,
+        2911
+      ],
+      "target_pixels": null,
+      "original_bytes": 42456,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "205 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        2052,
+        2911
+      ],
+      "target_pixels": [
+        763,
+        1083
+      ],
+      "original_bytes": 1419785,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "208 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        872,
+        1744
+      ],
+      "target_pixels": null,
+      "original_bytes": 10540,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "209 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        872,
+        1744
+      ],
+      "target_pixels": [
+        348,
+        695
+      ],
+      "original_bytes": 411593,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "212 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        231
+      ],
+      "target_pixels": null,
+      "original_bytes": 4748,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "213 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        231
+      ],
+      "target_pixels": [
+        415,
+        78
+      ],
+      "original_bytes": 5644,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "214 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        976,
+        163
+      ],
+      "target_pixels": null,
+      "original_bytes": 887,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "215 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        976,
+        163
+      ],
+      "target_pixels": [
+        235,
+        39
+      ],
+      "original_bytes": 54435,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "224 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1066
+      ],
+      "target_pixels": null,
+      "original_bytes": 272304,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "227 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        500
+      ],
+      "target_pixels": null,
+      "original_bytes": 106853,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "230 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        544,
+        676
+      ],
+      "target_pixels": null,
+      "original_bytes": 101359,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "233 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        825,
+        984
+      ],
+      "target_pixels": null,
+      "original_bytes": 849123,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "247 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1373
+      ],
+      "target_pixels": null,
+      "original_bytes": 1090467,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "250 0 R",
+      "status": "modified",
+      "source_pixels": [
+        982,
+        1488
+      ],
+      "target_pixels": [
+        632,
+        957
+      ],
+      "original_bytes": 1065749,
+      "output_bytes": 671768,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "253 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1272
+      ],
+      "target_pixels": null,
+      "original_bytes": 997946,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "256 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1387
+      ],
+      "target_pixels": null,
+      "original_bytes": 1094019,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "259 0 R",
+      "status": "modified",
+      "source_pixels": [
+        1900,
+        798
+      ],
+      "target_pixels": [
+        1231,
+        517
+      ],
+      "original_bytes": 313161,
+      "output_bytes": 254753,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "273 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        944,
+        1321
+      ],
+      "target_pixels": null,
+      "original_bytes": 641209,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "293 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2560,
+        1440
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 2032392,
+      "output_bytes": 1449348,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "294 0 R",
+      "status": "modified",
+      "source_pixels": [
+        1083,
+        630
+      ],
+      "target_pixels": [
+        633,
+        368
+      ],
+      "original_bytes": 72298,
+      "output_bytes": 54409,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "295 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1108,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1328,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "296 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1108,
+        297
+      ],
+      "target_pixels": [
+        344,
+        92
+      ],
+      "original_bytes": 6399,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "297 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        592,
+        230
+      ],
+      "target_pixels": null,
+      "original_bytes": 986,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "298 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        592,
+        230
+      ],
+      "target_pixels": [
+        142,
+        55
+      ],
+      "original_bytes": 78003,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "299 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        944,
+        630
+      ],
+      "target_pixels": [
+        489,
+        326
+      ],
+      "original_bytes": 8637,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "300 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        200,
+        200
+      ],
+      "target_pixels": null,
+      "original_bytes": 18316,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "301 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        225,
+        225
+      ],
+      "target_pixels": null,
+      "original_bytes": 2579,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "302 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        368,
+        280
+      ],
+      "target_pixels": null,
+      "original_bytes": 25225,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "303 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        444,
+        427
+      ],
+      "target_pixels": null,
+      "original_bytes": 1300,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "304 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        444,
+        427
+      ],
+      "target_pixels": null,
+      "original_bytes": 32358,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "307 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        525,
+        270
+      ],
+      "target_pixels": null,
+      "original_bytes": 885,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "308 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        525,
+        270
+      ],
+      "target_pixels": [
+        126,
+        65
+      ],
+      "original_bytes": 70509,
+      "output_bytes": null,
+      "skipped_reason": "image mask/alpha behaviour must remain untouched"
+    },
+    {
+      "object_id": "309 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        400,
+        400
+      ],
+      "target_pixels": null,
+      "original_bytes": 27043,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "324 0 R",
+      "status": "modified",
+      "source_pixels": [
+        745,
+        1090
+      ],
+      "target_pixels": [
+        559,
+        818
+      ],
+      "original_bytes": 50879,
+      "output_bytes": 46177,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "328 0 R",
+      "status": "modified",
+      "source_pixels": [
+        991,
+        893
+      ],
+      "target_pixels": [
+        744,
+        670
+      ],
+      "original_bytes": 49894,
+      "output_bytes": 47407,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "332 0 R",
+      "status": "modified",
+      "source_pixels": [
+        919,
+        883
+      ],
+      "target_pixels": [
+        690,
+        663
+      ],
+      "original_bytes": 57132,
+      "output_bytes": 49415,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "340 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        636,
+        630
+      ],
+      "target_pixels": null,
+      "original_bytes": 65145,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "341 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        636,
+        630
+      ],
+      "target_pixels": null,
+      "original_bytes": 18801,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "342 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        839,
+        826
+      ],
+      "target_pixels": null,
+      "original_bytes": 54603,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "343 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        839,
+        826
+      ],
+      "target_pixels": [
+        630,
+        620
+      ],
+      "original_bytes": 15047,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "344 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        706,
+        732
+      ],
+      "target_pixels": null,
+      "original_bytes": 67309,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "345 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        706,
+        732
+      ],
+      "target_pixels": null,
+      "original_bytes": 18984,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "349 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1024
+      ],
+      "target_pixels": null,
+      "original_bytes": 37043,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "350 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1024,
+        1024
+      ],
+      "target_pixels": null,
+      "original_bytes": 746364,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — resolution is appropriate for the screen target"
+    },
+    {
+      "object_id": "358 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        704,
+        786
+      ],
+      "target_pixels": null,
+      "original_bytes": 26651,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "364 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        704,
+        786
+      ],
+      "target_pixels": null,
+      "original_bytes": 26651,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "365 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        704,
+        786
+      ],
+      "target_pixels": null,
+      "original_bytes": 146875,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "371 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        698,
+        828
+      ],
+      "target_pixels": null,
+      "original_bytes": 27764,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "377 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        698,
+        828
+      ],
+      "target_pixels": null,
+      "original_bytes": 27764,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "378 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        698,
+        828
+      ],
+      "target_pixels": null,
+      "original_bytes": 146454,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "398 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1661,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "400 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": [
+        485,
+        118
+      ],
+      "original_bytes": 8445,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "402 0 R",
+      "status": "modified",
+      "source_pixels": [
+        3500,
+        1969
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 4389772,
+      "output_bytes": 877259,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "403 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2560,
+        1440
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 2193081,
+      "output_bytes": 1322282,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "404 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        264,
+        184
+      ],
+      "target_pixels": null,
+      "original_bytes": 964,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "411 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        264,
+        184
+      ],
+      "target_pixels": null,
+      "original_bytes": 838,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "422 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": [
+        594,
+        144
+      ],
+      "original_bytes": 7480,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "423 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1494,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "430 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": null,
+      "original_bytes": 1494,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "436 0 R",
+      "status": "skipped",
+      "source_pixels": [
+        1222,
+        297
+      ],
+      "target_pixels": [
+        445,
+        108
+      ],
+      "original_bytes": 7414,
+      "output_bytes": null,
+      "skipped_reason": "only direct DCTDecode JPEG streams are supported safely"
+    },
+    {
+      "object_id": "451 0 R",
+      "status": "modified",
+      "source_pixels": [
+        2560,
+        1440
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 4011995,
+      "output_bytes": 2610056,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "458 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        73,
+        265
+      ],
+      "target_pixels": null,
+      "original_bytes": 515,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "459 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        73,
+        265
+      ],
+      "target_pixels": null,
+      "original_bytes": 520,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "491 0 R",
+      "status": "modified",
+      "source_pixels": [
+        3500,
+        1969
+      ],
+      "target_pixels": [
+        1920,
+        1080
+      ],
+      "original_bytes": 5722779,
+      "output_bytes": 1137468,
+      "skipped_reason": null
+    },
+    {
+      "object_id": "500 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        809,
+        835
+      ],
+      "target_pixels": null,
+      "original_bytes": 31638,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "506 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        809,
+        835
+      ],
+      "target_pixels": null,
+      "original_bytes": 31638,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "507 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        809,
+        835
+      ],
+      "target_pixels": null,
+      "original_bytes": 172606,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    },
+    {
+      "object_id": "513 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        805,
+        876
+      ],
+      "target_pixels": null,
+      "original_bytes": 32177,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "519 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        805,
+        876
+      ],
+      "target_pixels": null,
+      "original_bytes": 32177,
+      "output_bytes": null,
+      "skipped_reason": "DO NOT MODIFY — physical geometry is unknown"
+    },
+    {
+      "object_id": "520 0 R",
+      "status": "unchanged",
+      "source_pixels": [
+        805,
+        876
+      ],
+      "target_pixels": null,
+      "original_bytes": 172786,
+      "output_bytes": null,
+      "skipped_reason": "UNDERSAMPLED — DO NOT MODIFY"
+    }
+  ],
+  "size": {
+    "original_bytes": 61002045,
+    "output_bytes": 37744833,
+    "saved_bytes": 23257212,
+    "saved_percent": 38.12529891415935,
+    "estimated_saving_bytes": 32019398
+  },
+  "validation": {
+    "passed": true,
+    "page_count_preserved": true,
+    "page_geometry_preserved": true,
+    "page_rotation_preserved": true,
+    "image_placement_preserved": true,
+    "image_aspect_ratios_preserved": true,
+    "image_formats_preserved": true,
+    "no_images_upsampled": true,
+    "non_targeted_objects_preserved": true,
+    "aspect_ratio_violations": 0,
+    "placement_changes": 0,
+    "page_geometry_changes": 0,
+    "format_changes": 0,
+    "errors": []
+  }
+}

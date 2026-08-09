@@ -1,0 +1,427 @@
+use std::time::Duration;
+
+use keyring::{Entry, Error as KeyringError};
+use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+const SERVICE: &str = "com.nobspdf.desktop";
+const CREDENTIAL_ACCOUNT: &str = "licence-activation";
+const DEVICE_ACCOUNT: &str = "device-identifier";
+const DEFAULT_API_URL: &str = "https://nobspdf.com";
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LicenceState {
+    NotActivated,
+    Active,
+    Invalid,
+    Revoked,
+    ActivationLimitReached,
+    NetworkError,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LicenceStatus {
+    pub state: LicenceState,
+    pub message: Option<String>,
+    pub licence_key: Option<String>,
+    pub device_name: String,
+    pub locally_activated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct StoredCredential {
+    licence_key: String,
+    activation_id: String,
+    activation_token: String,
+    release_version: String,
+    platform: String,
+    state: LicenceState,
+}
+
+#[derive(Serialize)]
+struct ActivateRequest<'a> {
+    license_key: &'a str,
+    device_identifier: &'a str,
+    app_version: &'a str,
+    platform: &'a str,
+}
+
+#[derive(Serialize)]
+struct ActivationRequest<'a> {
+    activation_id: &'a str,
+}
+
+#[derive(Deserialize)]
+struct ApiResponse {
+    #[serde(default)]
+    valid: bool,
+    state: LicenceState,
+    message: Option<String>,
+    activation_id: Option<String>,
+    activation_token: Option<String>,
+    release_version: Option<String>,
+    platform: Option<String>,
+}
+
+fn credential_entry() -> Result<Entry, String> {
+    Entry::new(SERVICE, CREDENTIAL_ACCOUNT)
+        .map_err(|_| "The system credential store is unavailable.".into())
+}
+
+fn device_entry() -> Result<Entry, String> {
+    Entry::new(SERVICE, DEVICE_ACCOUNT)
+        .map_err(|_| "The system credential store is unavailable.".into())
+}
+
+fn read_credential() -> Result<Option<StoredCredential>, String> {
+    match credential_entry()?.get_password() {
+        Ok(value) => serde_json::from_str(&value)
+            .map(Some)
+            .map_err(|_| "The stored activation credential is unreadable.".into()),
+        Err(KeyringError::NoEntry) => Ok(None),
+        Err(_) => Err("The system credential store could not be read.".into()),
+    }
+}
+
+fn write_credential(credential: &StoredCredential) -> Result<(), String> {
+    let value = serde_json::to_string(credential)
+        .map_err(|_| "The activation credential could not be encoded.".to_string())?;
+    credential_entry()?
+        .set_password(&value)
+        .map_err(|_| "The activation could not be saved in the system credential store.".into())
+}
+
+fn delete_credential() -> Result<(), String> {
+    match credential_entry()?.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
+        Err(_) => {
+            Err("The activation could not be removed from the system credential store.".into())
+        }
+    }
+}
+
+fn device_identifier() -> Result<String, String> {
+    match device_entry()?.get_password() {
+        Ok(value) if Uuid::parse_str(&value).is_ok() => Ok(value),
+        Ok(_) | Err(KeyringError::NoEntry) => {
+            let value = Uuid::new_v4().to_string();
+            device_entry()?
+                .set_password(&value)
+                .map_err(|_| "The device identifier could not be saved securely.".to_string())?;
+            Ok(value)
+        }
+        Err(_) => {
+            Err("The device identifier could not be read from the system credential store.".into())
+        }
+    }
+}
+
+fn platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "macos"
+    }
+}
+
+fn device_name() -> String {
+    if cfg!(target_os = "windows") {
+        "This PC".into()
+    } else {
+        "This Mac".into()
+    }
+}
+
+fn api_url() -> &'static str {
+    option_env!("NOBS_LICENSE_API_URL")
+        .unwrap_or(DEFAULT_API_URL)
+        .trim_end_matches('/')
+}
+
+fn client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(Duration::from_secs(12))
+        .user_agent(concat!("NoBS-PDF/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|_| "The licensing service could not be prepared.".into())
+}
+
+pub fn normalize_licence_key(value: &str) -> Option<String> {
+    let compact: String = value
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(char::to_uppercase)
+        .collect();
+    let body = compact.strip_prefix("NOBS").unwrap_or(&compact);
+    if body.len() != 16 {
+        return None;
+    }
+    Some(format!(
+        "NOBS-{}-{}-{}-{}",
+        &body[0..4],
+        &body[4..8],
+        &body[8..12],
+        &body[12..16]
+    ))
+}
+
+pub fn local_status() -> LicenceStatus {
+    match read_credential() {
+        Ok(Some(credential)) => LicenceStatus {
+            locally_activated: credential.state == LicenceState::Active,
+            message: (credential.state == LicenceState::Revoked)
+                .then(|| "This licence has been revoked. Please contact support.".into()),
+            state: credential.state,
+            licence_key: Some(credential.licence_key),
+            device_name: device_name(),
+        },
+        Ok(None) => LicenceStatus {
+            state: LicenceState::NotActivated,
+            message: None,
+            licence_key: None,
+            device_name: device_name(),
+            locally_activated: false,
+        },
+        Err(message) => LicenceStatus {
+            state: LicenceState::Invalid,
+            message: Some(message),
+            licence_key: None,
+            device_name: device_name(),
+            locally_activated: false,
+        },
+    }
+}
+
+pub fn require_active() -> Result<(), String> {
+    match read_credential()? {
+        Some(StoredCredential {
+            state: LicenceState::Active,
+            ..
+        }) => Ok(()),
+        _ => Err("NoBS PDF must be activated before processing documents.".into()),
+    }
+}
+
+pub async fn activate(value: String) -> LicenceStatus {
+    let Some(licence_key) = normalize_licence_key(&value) else {
+        return status(
+            LicenceState::Invalid,
+            "Enter a valid NoBS PDF licence key.",
+            false,
+        );
+    };
+    let device = match device_identifier() {
+        Ok(value) => value,
+        Err(message) => return status(LicenceState::Invalid, &message, false),
+    };
+    let response = client()
+        .and_then(|client| {
+            Ok(client
+                .post(format!("{}/api/license/activate", api_url()))
+                .json(&ActivateRequest {
+                    license_key: &licence_key,
+                    device_identifier: &device,
+                    app_version: env!("CARGO_PKG_VERSION"),
+                    platform: platform(),
+                }))
+        })
+        .map_err(|message| message);
+    let response = match response {
+        Ok(request) => request.send().await,
+        Err(message) => return status(LicenceState::Invalid, &message, false),
+    };
+    let response = match response {
+        Ok(value) => value,
+        Err(_) => {
+            return status(
+                LicenceState::NetworkError,
+                "An internet connection is required for first activation.",
+                false,
+            )
+        }
+    };
+    let code = response.status();
+    let body = match response.json::<ApiResponse>().await {
+        Ok(value) => value,
+        Err(_) => {
+            return status(
+                LicenceState::Invalid,
+                "The licensing service returned an invalid response.",
+                false,
+            )
+        }
+    };
+    if code == StatusCode::CREATED && body.valid && body.state == LicenceState::Active {
+        let credential = StoredCredential {
+            licence_key: licence_key.clone(),
+            activation_id: body.activation_id.unwrap_or_default(),
+            activation_token: body.activation_token.unwrap_or_default(),
+            release_version: body.release_version.unwrap_or_default(),
+            platform: body.platform.unwrap_or_else(|| platform().into()),
+            state: LicenceState::Active,
+        };
+        if credential.activation_id.is_empty() || credential.activation_token.is_empty() {
+            return status(
+                LicenceState::Invalid,
+                "The licensing service returned an incomplete activation.",
+                false,
+            );
+        }
+        if let Err(message) = write_credential(&credential) {
+            return status(LicenceState::Invalid, &message, false);
+        }
+        return LicenceStatus {
+            state: LicenceState::Active,
+            message: None,
+            licence_key: Some(licence_key),
+            device_name: device_name(),
+            locally_activated: true,
+        };
+    }
+    LicenceStatus {
+        state: body.state,
+        message: body.message,
+        licence_key: Some(licence_key),
+        device_name: device_name(),
+        locally_activated: false,
+    }
+}
+
+pub async fn revalidate() -> LicenceStatus {
+    let Some(mut credential) = read_credential().ok().flatten() else {
+        return local_status();
+    };
+    if credential.state == LicenceState::Revoked {
+        return local_status();
+    }
+    let request = match client() {
+        Ok(client) => client
+            .post(format!("{}/api/license/verify", api_url()))
+            .bearer_auth(&credential.activation_token)
+            .json(&ActivationRequest {
+                activation_id: &credential.activation_id,
+            }),
+        Err(_) => return network_status(&credential),
+    };
+    let response = match request.send().await {
+        Ok(value) => value,
+        Err(_) => return network_status(&credential),
+    };
+    let body = match response.json::<ApiResponse>().await {
+        Ok(value) => value,
+        Err(_) => return network_status(&credential),
+    };
+    if body.state == LicenceState::Revoked {
+        credential.state = LicenceState::Revoked;
+        let _ = write_credential(&credential);
+        return LicenceStatus {
+            state: LicenceState::Revoked,
+            message: body.message,
+            licence_key: Some(credential.licence_key),
+            device_name: device_name(),
+            locally_activated: false,
+        };
+    }
+    if body.state == LicenceState::Invalid {
+        credential.state = LicenceState::Invalid;
+        let _ = write_credential(&credential);
+        return LicenceStatus {
+            state: LicenceState::Invalid,
+            message: body.message,
+            licence_key: Some(credential.licence_key),
+            device_name: device_name(),
+            locally_activated: false,
+        };
+    }
+    if body.valid && body.state == LicenceState::Active {
+        local_status()
+    } else {
+        network_status(&credential)
+    }
+}
+
+pub async fn deactivate() -> LicenceStatus {
+    let Some(credential) = read_credential().ok().flatten() else {
+        return local_status();
+    };
+    let request = match client() {
+        Ok(client) => client
+            .post(format!("{}/api/license/deactivate", api_url()))
+            .bearer_auth(&credential.activation_token)
+            .json(&ActivationRequest {
+                activation_id: &credential.activation_id,
+            }),
+        Err(_) => return network_status(&credential),
+    };
+    match request.send().await {
+        Ok(response) if response.status().is_success() => match delete_credential() {
+            Ok(()) => local_status(),
+            Err(message) => status(LicenceState::Invalid, &message, true),
+        },
+        Ok(response) => {
+            let body = response.json::<ApiResponse>().await.ok();
+            status(
+                body.as_ref()
+                    .map(|value| value.state.clone())
+                    .unwrap_or(LicenceState::Invalid),
+                body.and_then(|value| value.message)
+                    .as_deref()
+                    .unwrap_or("This device could not be deactivated."),
+                true,
+            )
+        }
+        Err(_) => network_status(&credential),
+    }
+}
+
+fn network_status(credential: &StoredCredential) -> LicenceStatus {
+    LicenceStatus {
+        state: LicenceState::NetworkError,
+        message: Some("NoBS PDF is offline. Your existing activation remains usable.".into()),
+        licence_key: Some(credential.licence_key.clone()),
+        device_name: device_name(),
+        locally_activated: credential.state == LicenceState::Active,
+    }
+}
+
+fn status(state: LicenceState, message: &str, locally_activated: bool) -> LicenceStatus {
+    LicenceStatus {
+        state,
+        message: Some(message.into()),
+        licence_key: None,
+        device_name: device_name(),
+        locally_activated,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalises_spaces_hyphens_and_case() {
+        assert_eq!(
+            normalize_licence_key(" nobs ab12-cd34 ef56 7890 ").as_deref(),
+            Some("NOBS-AB12-CD34-EF56-7890")
+        );
+        assert_eq!(normalize_licence_key("short"), None);
+    }
+
+    #[test]
+    fn network_failure_preserves_an_active_local_installation() {
+        let credential = StoredCredential {
+            licence_key: "NOBS-AB12-CD34-EF56-7890".into(),
+            activation_id: "act_test".into(),
+            activation_token: "secret".into(),
+            release_version: "1.0.0".into(),
+            platform: "macos".into(),
+            state: LicenceState::Active,
+        };
+        let result = network_status(&credential);
+        assert_eq!(result.state, LicenceState::NetworkError);
+        assert!(result.locally_activated);
+    }
+}

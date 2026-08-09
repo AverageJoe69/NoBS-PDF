@@ -1,0 +1,17 @@
+/target/
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+website/node_modules/
+website/dist/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pdf
+!tests/fixtures/*.pdf
+!tests/MT_AngelRaise_01.pdf
+/vendor/pdfium/

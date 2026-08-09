@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "resources": {
+      "../../vendor/pdfium/bin/pdfium.dll": "pdfium.dll"
+    },
+    "windows": {
+      "digestAlgorithm": "sha256"
+    }
+  }
+}
