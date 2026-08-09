@@ -99,13 +99,7 @@ impl CancellationToken {
 
 pub fn inspect_pdf(path: &Path) -> Result<DocumentSummary, AppError> {
     validate_pdf_path(path)?;
-    let report = inspect(path).map_err(|e| {
-        app_error(
-            AppErrorCode::InvalidPdf,
-            "This PDF could not be inspected.",
-            e,
-        )
-    })?;
+    let report = inspect(path).map_err(map_inspection_error)?;
     Ok(DocumentSummary {
         path: path.display().to_string(),
         filename: path
@@ -460,6 +454,14 @@ fn result_from_flatten_report(report: FlattenReport) -> Result<OptimisationResul
     })
 }
 fn map_flatten_error(error: crate::flatten_pages::FlattenError) -> AppError {
+    if matches!(
+        &error,
+        crate::flatten_pages::FlattenError::Inspection(
+            crate::parser::InspectionError::EncryptedDocument
+        )
+    ) {
+        return encrypted_pdf_error();
+    }
     let message = error.to_string();
     let code = if message.contains("validation") {
         AppErrorCode::ValidationFailed
@@ -475,6 +477,12 @@ fn map_flatten_error(error: crate::flatten_pages::FlattenError) -> AppError {
     }
 }
 fn map_export_error(error: crate::exporter::ExportError) -> AppError {
+    if matches!(
+        &error,
+        crate::exporter::ExportError::Inspection(crate::parser::InspectionError::EncryptedDocument)
+    ) {
+        return encrypted_pdf_error();
+    }
     let message = error.to_string();
     let code = if message.contains("validation") {
         AppErrorCode::ValidationFailed
@@ -488,6 +496,23 @@ fn map_export_error(error: crate::exporter::ExportError) -> AppError {
         message: "NoBS PDF could not create a validated output.".into(),
         detail: cfg!(debug_assertions).then_some(message),
     }
+}
+fn map_inspection_error(error: crate::parser::InspectionError) -> AppError {
+    if matches!(&error, crate::parser::InspectionError::EncryptedDocument) {
+        encrypted_pdf_error()
+    } else {
+        app_error(
+            AppErrorCode::InvalidPdf,
+            "This PDF could not be inspected.",
+            error,
+        )
+    }
+}
+fn encrypted_pdf_error() -> AppError {
+    simple_error(
+        AppErrorCode::InvalidPdf,
+        "Encrypted PDFs are not supported. Decrypt the document before optimising it.",
+    )
 }
 fn simple_error(code: AppErrorCode, message: &str) -> AppError {
     AppError {

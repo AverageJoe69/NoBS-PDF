@@ -19,6 +19,8 @@ pub enum InspectionError {
     Io(#[from] std::io::Error),
     #[error("cannot parse PDF: {0}")]
     Pdf(#[from] lopdf::Error),
+    #[error("encrypted PDFs are not supported; decrypt the document before optimising it")]
+    EncryptedDocument,
 }
 
 pub trait PdfParser {
@@ -44,6 +46,9 @@ impl PdfParser for LopdfParser {
     fn inspect(&self, path: &Path) -> Result<AnalysisResult, InspectionError> {
         let file_size = fs::metadata(path)?.len();
         let doc = Document::load(path)?;
+        if doc.is_encrypted() {
+            return Err(InspectionError::EncryptedDocument);
+        }
         let page_map = doc.get_pages();
         let mut images: BTreeMap<ObjectId, ImageWork> = BTreeMap::new();
         let mut warnings = vec![];

@@ -1,11 +1,15 @@
-use std::{fs, path::Path};
+use std::{collections::HashSet, fs, path::Path};
 
 use jpeg_encoder::{ColorType, Encoder};
 use lopdf::{
     content::{Content, Operation},
     dictionary, Document, Object, Stream,
 };
-use pdfdoctor::exporter::{export_1080p, export_original_resolution, ExportOptions};
+use pdfdoctor::{
+    exporter::{export_1080p, export_original_resolution, ExportError, ExportOptions},
+    parser::InspectionError,
+    validator::validate_export,
+};
 use tempfile::TempDir;
 
 fn jpeg(width: u16, height: u16) -> Vec<u8> {
@@ -173,4 +177,59 @@ fn matches_jpeg_to_document_pixels_without_changing_placement_geometry() {
     );
     assert_eq!(before.images[0].filters, after.images[0].filters);
     assert!(after.images[0].encoded_bytes < before.images[0].encoded_bytes);
+}
+
+#[test]
+fn encrypted_pdf_is_rejected_before_export_and_writes_nothing() {
+    let input = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/encrypted_password_nobs-test.pdf");
+    let directory = TempDir::new().unwrap();
+    let output = directory.path().join("must-not-exist.pdf");
+
+    let app_error = pdfdoctor::app::inspect_pdf(&input).unwrap_err();
+    assert_eq!(
+        app_error.message,
+        "Encrypted PDFs are not supported. Decrypt the document before optimising it."
+    );
+
+    let error = export_1080p(&input, &output, &ExportOptions { dry_run: false }).unwrap_err();
+    assert!(matches!(
+        error,
+        ExportError::Inspection(InspectionError::EncryptedDocument)
+    ));
+    assert!(error
+        .to_string()
+        .contains("encrypted PDFs are not supported"));
+    assert!(!output.exists());
+}
+
+#[test]
+fn validation_rejects_zero_page_and_unparseable_outputs() {
+    let directory = TempDir::new().unwrap();
+    let input = directory.path().join("input.pdf");
+    let empty_output = directory.path().join("empty.pdf");
+    let invalid_output = directory.path().join("invalid.pdf");
+    fixture(&input);
+
+    let mut empty = Document::with_version("1.7");
+    let pages = empty.add_object(
+        dictionary! { "Type" => "Pages", "Kids" => Vec::<Object>::new(), "Count" => 0 },
+    );
+    let catalog = empty.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    empty.trailer.set("Root", catalog);
+    empty.save(&empty_output).unwrap();
+
+    let before = pdfdoctor::inspect(&input).unwrap();
+    let after = pdfdoctor::inspect(&empty_output).unwrap();
+    let report = validate_export(&input, &empty_output, &before, &after, &HashSet::new()).unwrap();
+    assert!(!report.passed);
+    assert!(!report.output_has_pages);
+    assert!(!report.page_count_preserved);
+    assert!(report
+        .errors
+        .iter()
+        .any(|error| error.contains("zero pages")));
+
+    fs::write(&invalid_output, b"%PDF-1.7\nnot a valid PDF").unwrap();
+    assert!(validate_export(&input, &invalid_output, &before, &before, &HashSet::new(),).is_err());
 }

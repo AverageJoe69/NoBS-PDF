@@ -9,6 +9,7 @@ use crate::{geometry::Matrix, model::AnalysisResult, optimisation::GEOMETRY_TOLE
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ValidationReport {
     pub passed: bool,
+    pub output_has_pages: bool,
     pub page_count_preserved: bool,
     pub page_geometry_preserved: bool,
     pub page_rotation_preserved: bool,
@@ -42,6 +43,7 @@ pub fn validate_export(
     modified_ids: &HashSet<String>,
 ) -> Result<ValidationReport, ValidationError> {
     let mut report = ValidationReport {
+        output_has_pages: !after.pages.is_empty(),
         page_count_preserved: before.pages.len() == after.pages.len(),
         page_geometry_preserved: true,
         page_rotation_preserved: true,
@@ -53,6 +55,9 @@ pub fn validate_export(
         vector_content_preserved: true,
         ..ValidationReport::default()
     };
+    if !report.output_has_pages {
+        report.errors.push("exported PDF has zero pages".into());
+    }
     if !report.page_count_preserved {
         report.errors.push("page count changed".into());
     }
@@ -122,11 +127,44 @@ pub fn validate_export(
 
     let original = Document::load(input_path)?;
     let exported = Document::load(output_path)?;
+    let original_page_count = original.get_pages().len();
+    let exported_page_count = exported.get_pages().len();
+    if exported_page_count == 0 {
+        report.output_has_pages = false;
+        if !report
+            .errors
+            .iter()
+            .any(|error| error == "exported PDF has zero pages")
+        {
+            report.errors.push("exported PDF has zero pages".into());
+        }
+    }
+    if original_page_count != exported_page_count {
+        report.page_count_preserved = false;
+        report.errors.push(format!(
+            "reparsed page count changed from {original_page_count} to {exported_page_count}"
+        ));
+    }
+    if before.file.page_count != original_page_count {
+        report.page_count_preserved = false;
+        report.errors.push(format!(
+            "source analysis page count {} disagrees with reparsed count {original_page_count}",
+            before.file.page_count
+        ));
+    }
+    if after.file.page_count != exported_page_count {
+        report.page_count_preserved = false;
+        report.errors.push(format!(
+            "output analysis page count {} disagrees with reparsed count {exported_page_count}",
+            after.file.page_count
+        ));
+    }
     report.non_targeted_objects_preserved =
         compare_object_graphs(&original, &exported, modified_ids, &mut report.errors);
     report.annotations_and_links_preserved = report.non_targeted_objects_preserved;
     report.transparency_and_other_content_preserved = report.non_targeted_objects_preserved;
-    report.passed = report.page_count_preserved
+    report.passed = report.output_has_pages
+        && report.page_count_preserved
         && report.page_geometry_preserved
         && report.page_rotation_preserved
         && report.image_placement_preserved
