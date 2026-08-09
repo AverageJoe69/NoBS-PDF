@@ -100,7 +100,21 @@ An explicit full-page export was also generated independently from baseline comm
 
 ### Available real-document coverage
 
-The golden mixed 15-page presentation and synthetic existing fixtures cover raster-heavy/mixed pages, page geometry/rotation/boxes, annotations, fonts, selectable text, vectors, repeated images, unusual placement geometry, and multi-page output. The workspace contains no independent real InDesign export, Illustrator-heavy file, encrypted PDF, transparency-specific file, dedicated text-heavy publication, corrupt real font/image sample, or unusual page-tree corpus. Those categories therefore remain unverified; generated output PDFs are not independent source documents.
+The golden mixed 15-page presentation and synthetic existing fixtures cover raster-heavy/mixed pages, page geometry/rotation/boxes, annotations, fonts, selectable text, vectors, repeated images, unusual placement geometry, and multi-page output.
+
+An external, uncommitted compatibility corpus at `compatibility corpus/` supplied five additional inputs:
+
+| File | Input SHA-256 | Coverage | 0.36 vs 0.42 result |
+| --- | --- | --- | --- |
+| `02_text_heavy_embedded_fonts.pdf` | `3cb6a04750f5235791d57dff873b635b202c1067f9d57b60bacd1ea1d0bab777` | 9 pages, 641 text and 530 vector operations | Inspection JSON identical; export byte-identical (57,550 bytes, SHA-256 `5c2a2a87033ed1fdbd7e274a46fbd329350e0f6f714c0bb2828cf104a1114155`). |
+| `06_annotations_and_links.pdf` | `a4e0372a99a29e082b264578f414210ec2fb377a71a0b3e2a4a7a64265e53776` | 2 pages, annotations/links, 9 text operations | Inspection JSON identical; export byte-identical (44,662 bytes, SHA-256 `4d982ead65d91799bd7fa1198fddd1aafc9dcc4e5e1058d09a6ece638f206fe1`). |
+| `07_encrypted_password_nobs-test.pdf` | `2238c1e3dfebdb600aff5b2f31e18fd40a58a3c70d06c2b7306d4d5abf7e213b` | Password/encryption behaviour, one A4 page | **FAIL:** 0.36 sees one page and exports 43,685 bytes; 0.42 silently sees zero pages and exports an 807-byte empty PDF. Validation incorrectly passes because both 0.42 loads observe zero pages. PDFium flattening rejects both versions with `PasswordError`, which is safe; the normal export path is not safe under 0.42. |
+| `08_unusual_sizes_rotations_page_tree.pdf` | `c6de02260e0da90b1106039e5a0387acd80ad47928e9e39d2627b1d013328a23` | 8 pages, unusual sizes/page tree, 90° and 180° rotation | Inspection JSON identical; export byte-identical (46,728 bytes, SHA-256 `ef75c4367a64df527431afc6ae91dc1464a332f8b59fbf166431cd4d925d58c8`). Flattening safely refuses the rotated page in both versions. |
+| `09_cropboxes_blank_pages_edge_cases.pdf` | `7cbaf61efab9011b828292b9d93183faff8915586b84096120c728ea0c607a92` | 6 pages, crop boxes, blank pages, 270° rotation | Inspection JSON identical; export byte-identical (45,204 bytes, SHA-256 `dffae8490edd0ca8417031386649cbcd869491a765948fb4a949232ae8044805`). Flattening safely refuses the rotated page in both versions. |
+
+For the two small non-rotated, non-encrypted files, full-page flattening was consistently rejected in both versions because raster output would be larger than the source. This is the intended NoBS validation guard, not a compatibility failure.
+
+The workspace still contains no independently identified InDesign export, Illustrator-heavy file, transparency-specific document, image-heavy deck beyond the golden file, or corrupt real font/image sample. Generated output PDFs are not independent source documents.
 
 ### Performance
 
@@ -117,10 +131,10 @@ Both root and desktop `cargo audit` runs report zero vulnerabilities. `RUSTSEC-2
 
 ## Final recommendation
 
-**NOT SAFE TO UPGRADE YET.**
+**NOT SAFE TO UPGRADE.**
 
 The code and golden evidence strongly support compatibility: no API or logic changes were needed, every automated test passes, golden observable behaviour is exactly unchanged, an explicit export is byte-identical, the bounded malformed corpus passes, performance is acceptable, the release application builds, and the target vulnerability is removed.
 
-However, the brief permits **SAFE TO UPGRADE** only after the requested representative real-world and hostile document coverage is exercised. Those source documents are not present in the workspace, particularly independent InDesign/Illustrator/transparency/encrypted/text-heavy/unusual-page-tree and corrupt-font/image cases. The upgrade should remain on this branch until that corpus is supplied and produces no panic, uncontrolled resource use, validation failure, or unexplained output/render difference.
+The supplied encrypted corpus case demonstrates destructive observable behaviour: lopdf 0.42 changes the normal export path from a one-page 43,685-byte document to an 807-byte zero-page PDF, while current validation reports PASS. This alone fails the page-count, content-preservation, graceful-failure and understood-output criteria. The missing InDesign/Illustrator/transparency/corrupt-real-resource categories are additional coverage gaps, but they are no longer the primary blocker.
 
-To reach **SAFE TO UPGRADE**, add sanitized representative PDFs for the missing categories, record provenance/type, run inspection and the applicable optimisation path under both baseline and 0.42, compare output structure/render/performance, and append the results here. If those pass, the exact merge consists of the `Cargo.toml` lopdf pin, both deliberate lockfile changes, this compatibility report, and the malformed-PDF regression test; the golden manifest must remain unchanged.
+Do not merge the current dependency change. To reach **SAFE TO UPGRADE**, first determine whether a newer patched lopdf release fixes the encrypted-document page-tree regression or whether NoBS must explicitly detect and reject encrypted inputs before any 0.42 load/export. Either path is a separate reviewed behaviour/security decision, not a compatibility shim for this branch. Add a permanent regression fixture proving that encrypted input can never silently produce a zero-page successful export, then repeat this complete comparison and add the remaining representative categories. The golden manifest must remain unchanged.
