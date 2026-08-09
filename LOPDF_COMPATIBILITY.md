@@ -1,4 +1,81 @@
-# lopdf 0.42 compatibility investigation
+# lopdf 0.42–0.44 compatibility investigation
+
+## 0.43 and 0.44 follow-up
+
+The follow-up was performed in isolated worktrees on `compat/lopdf-043` and
+`compat/lopdf-044`; `main` was not modified. Both releases require
+`indexmap 2.14.0` and `time 0.3.49` in this project. lopdf 0.43 does not compile
+with the previous `time 0.3.47` pin because it uses a format-item API introduced
+in 0.3.49. lopdf 0.44 also changes `Document::get_page_content()` to return
+`Vec<u8>` rather than `Result<Vec<u8>>`; NoBS uses
+`get_page_content_with_limit(..., usize::MAX)` at the affected call sites to
+retain fallible error handling.
+
+### Corpus result matrix before hardening
+
+Every generated output below was reparsed with the known-good lopdf 0.36 build.
+Exit 0 therefore means the command completed and `valid` means the serialized
+file was structurally parseable; it does not imply that its content was safely
+preserved.
+
+| Fixture | lopdf 0.36 | lopdf 0.43 | lopdf 0.44 | 0.43/0.44 vs 0.36 |
+| --- | --- | --- | --- | --- |
+| text/embedded fonts | exit 0; 57,550 B; 9 pages; valid | exit 0; 57,550 B; 9 pages; valid | exit 0; 57,550 B; 9 pages; valid | byte-identical |
+| annotations/links | exit 0; 44,662 B; 2 pages; valid | exit 0; 44,662 B; 2 pages; valid | exit 0; 44,662 B; 2 pages; valid | byte-identical |
+| encrypted (`nobs-test`) | exit 0; 43,685 B; 1 page; valid | **exit 0; 807 B; 0 pages; valid** | **exit 0; 807 B; 0 pages; valid** | regression; 0.43 and 0.44 outputs are identical to the broken 0.42 output |
+| unusual sizes/rotations | exit 0; 46,728 B; 8 pages; valid | exit 0; 46,728 B; 8 pages; valid | exit 0; 46,728 B; 8 pages; valid | byte-identical |
+| crop boxes/blank pages | exit 0; 45,204 B; 6 pages; valid | exit 0; 45,204 B; 6 pages; valid | exit 0; 45,204 B; 6 pages; valid | byte-identical |
+
+Neither 0.43 nor 0.44 fixes the encrypted-document regression. The 807-byte
+file is parseable PDF syntax, but it has no pages and is not a valid preserved
+export of the one-page source. Existing validation passed because both source
+inspection and output inspection incorrectly observed zero pages under these
+lopdf versions.
+
+### Hardened 0.44 behaviour
+
+Because neither candidate safely processes the fixture, NoBS now checks
+`Document::is_encrypted()` immediately after loading and before inspection or
+processing. Encrypted input returns the explicit error “Encrypted PDFs are not
+supported. Decrypt the document before optimising it.” The command exits 1 and
+writes no output; it does not attempt to decrypt, weaken, or bypass encryption.
+
+Validation is independently hardened so that success requires all of the
+following:
+
+- the exported file reparses as a PDF;
+- an input with one or more pages cannot produce a zero-page output;
+- directly reparsed source/output page counts agree;
+- inspection page counts agree with the directly reparsed page counts.
+
+The sanitized encrypted fixture is permanently committed at
+`tests/fixtures/encrypted_password_nobs-test.pdf`. Regression tests prove that
+both the public app API and export engine reject it before writing, and that
+zero-page and unparseable outputs cannot pass validation.
+
+After hardening, the four unencrypted corpus outputs remain byte-identical to
+the lopdf 0.36 baseline. The encrypted case exits 1 and creates no output.
+
+### Follow-up verification
+
+- `cargo test`: PASS (including encrypted-input and validation regressions).
+- `cargo test --release`: PASS.
+- `cargo test --release --test benchmark -- --ignored --test-threads=1`: PASS, 9/9.
+- Desktop Rust/licensing tests: PASS, 2/2.
+- Root and desktop `cargo audit`: zero vulnerabilities. Existing target-specific
+  desktop maintenance warnings remain; lopdf 0.44 no longer introduces the
+  `ttf-parser 0.25.1` warning present with 0.42 and 0.43.
+
+### Updated recommendation
+
+Ship **lopdf 0.44 with the encrypted-input rejection and hardened validation in
+this branch**. Do not ship raw 0.43 or raw 0.44: both silently export the
+encrypted one-page fixture as an 807-byte, zero-page PDF. Version 0.44 is
+preferred over 0.43 because observable non-encrypted output remains identical,
+the complete test suite passes with the guards, and its dependency graph removes
+the additional unmaintained `ttf-parser` warning. Encrypted PDFs remain an
+explicitly unsupported input until a separately tested implementation can
+preserve them safely.
 
 ## Branch and frozen baseline
 
