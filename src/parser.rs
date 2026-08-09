@@ -56,7 +56,7 @@ impl PdfParser for LopdfParser {
             let resources = inherited_dict(&doc, page_dict, b"Resources");
             let mut counts = ObjectCounts::default();
             match doc
-                .get_page_content(*page_id)
+                .get_page_content_with_limit(*page_id, usize::MAX)
                 .and_then(|bytes| Content::decode(&bytes))
             {
                 Ok(content) => walk_content(

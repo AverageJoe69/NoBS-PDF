@@ -233,7 +233,9 @@ fn plan_page(
         .map_err(|_| "no_xobjects")?
         .as_dict()
         .map_err(|_| "indirect_xobject_dictionary")?;
-    let bytes = doc.get_page_content(page_id).map_err(|e| e.to_string())?;
+    let bytes = doc
+        .get_page_content_with_limit(page_id, usize::MAX)
+        .map_err(|e| e.to_string())?;
     let content = Content::decode(&bytes).map_err(|e| e.to_string())?;
     let mut ctm = Matrix::IDENTITY;
     let mut stack = Vec::new();
@@ -440,7 +442,7 @@ fn apply_merge(doc: &mut Document, plan: &MergePage) -> Result<(), RasterMergeEr
     resources.set("XObject", xobjects);
     doc.get_dictionary_mut(plan.page_id)?
         .set("Resources", resources);
-    let bytes = doc.get_page_content(plan.page_id)?;
+    let bytes = doc.get_page_content_with_limit(plan.page_id, usize::MAX)?;
     let mut content = Content::decode(&bytes)?;
     content.operations.retain(|op| {
         if op.operator != "Do" {

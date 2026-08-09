@@ -205,7 +205,7 @@ fn flatten_pages_impl(
     let rendered = if preserve_text {
         let mut graphics_document = Document::load(input)?;
         for (page_number, page_id) in graphics_document.get_pages() {
-            let bytes = graphics_document.get_page_content(page_id)?;
+            let bytes = graphics_document.get_page_content_with_limit(page_id, usize::MAX)?;
             let content = Content::decode(&bytes)?;
             let (background, _) =
                 split_at_top_raster(&graphics_document, page_id, &content, page_number)?;
@@ -380,7 +380,7 @@ fn replace_page(
     };
     let mut foreground_xobject_names = HashSet::new();
     if preserve_text {
-        let original = Content::decode(&doc.get_page_content(page_id)?)?;
+        let original = Content::decode(&doc.get_page_content_with_limit(page_id, usize::MAX)?)?;
         let (_, foreground) = split_at_top_raster(doc, page_id, &original, page_number)?;
         foreground_xobject_names.extend(
             foreground
