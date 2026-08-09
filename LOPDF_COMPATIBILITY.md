@@ -64,16 +64,63 @@ This makes the parser security issue reachable for any PDF selected by the user.
 
 ## Upgrade/API adaptations
 
-Pending. Only `lopdf` will be changed, to the minimum patched `0.42.0`; every required source adaptation will be listed here.
+`Cargo.toml` was changed only from `lopdf = "=0.36.0"` to the minimum patched `lopdf = "=0.42.0"`. Root and desktop lockfiles were refreshed deliberately. No Rust source adaptation was required: `cargo check` succeeded immediately, so there are no API compatibility shims and no application-logic changes.
+
+The required lopdf graph changes remove `bytecount`, `nom_locate`, the old rand 0.9 support chain and related WASI/zerocopy packages; they add/update lopdf's selected `getrandom`, `rand 0.10`, `chacha20`, and `ttf-parser 0.25.1` dependencies. The direct `time = 0.3.47` security pin remains unchanged.
 
 ## Regression, output, render, hostile-corpus and performance results
 
-Pending upgrade.
+### Existing regression suite
+
+- `cargo test`: PASS, 35/35 normal tests; 9 expensive golden tests correctly skipped by default.
+- `cargo test --release`: PASS, 35/35 normal release tests.
+- `cargo test --release --test benchmark -- --ignored --test-threads=1`: PASS, 9/9 golden checks.
+- Desktop Rust/licensing tests: PASS, 2/2.
+- Website tests: PASS, 18/18; website production build PASS.
+- Desktop frontend and Tauri macOS release application bundle: PASS.
+
+### Golden benchmark and render comparison
+
+The 0.42 benchmark is exactly equal to the production reference:
+
+- input: 61,002,045 bytes; 15 pages; 108 raster objects; 88 placements
+- output: 11,835,505 bytes; reduction 80.59818322484107%
+- raster objects after: 15; pages composited: 15
+- text operations: 645 before / 232 after
+- vector operations: 267 before / 11 after
+- page count, geometry, boxes, rotation, annotations and aspect ratios: PASS
+- selectable text and native vectors: present
+- maximum mean render error: 5.817019354423868 / 255; validation PASS
+
+An explicit full-page export was also generated independently from baseline commit `50701d8` (lopdf 0.36) and this branch (lopdf 0.42). Both outputs are byte-for-byte identical: 11,858,548 bytes with SHA-256 `e7c9a7f7bcfa8bd60e58ecbc9a39ba7f2b8d97f53696e83ef312142f1dbabc7f`. Therefore object counts/order, xref serialization, stream lengths/data, image dimensions/formats/filters, page resources/content streams, fonts, annotations and metadata are identical for the golden document. All 15 per-page pixel dimensions and mean render errors are also identical; the maximum for this explicit export is 4.759586709104938.
+
+### Benign malformed/hostile corpus
+
+`tests/malformed_pdfs.rs` adds bounded regression coverage. All cases complete without panic or stack overflow: header-only/truncated inputs, invalid object reference, malformed stream length, invalid xref, incomplete encryption dictionary, corrupt font/image streams, unusual filter chain, and a direct object nested to depth 128. The depth-128 object is rejected as an error beyond lopdf 0.42's 100-level limit. The payload is intentionally small and benign.
+
+### Available real-document coverage
+
+The golden mixed 15-page presentation and synthetic existing fixtures cover raster-heavy/mixed pages, page geometry/rotation/boxes, annotations, fonts, selectable text, vectors, repeated images, unusual placement geometry, and multi-page output. The workspace contains no independent real InDesign export, Illustrator-heavy file, encrypted PDF, transparency-specific file, dedicated text-heavy publication, corrupt real font/image sample, or unusual page-tree corpus. Those categories therefore remain unverified; generated output PDFs are not independent source documents.
+
+### Performance
+
+Single warm-cache local samples with `/usr/bin/time -lp`:
+
+- lopdf 0.36: 7.15 s wall, 9.49 s user, 0.23 s system, 839,254,016-byte maximum RSS.
+- lopdf 0.42: 7.14 s wall, 6.63 s user, 0.27 s system, 862,879,744-byte maximum RSS.
+
+Wall time is effectively unchanged. The one-sample maximum RSS increase is approximately 2.8%; this is not an unreasonable regression, but single samples are not a rigorous memory benchmark.
 
 ## Security audit
 
-Baseline: `RUSTSEC-2026-0187` remains through `lopdf 0.36.0`. The previously addressed `time` and `quick-xml` advisories are resolved.
+Both root and desktop `cargo audit` runs report zero vulnerabilities. `RUSTSEC-2026-0187`, `RUSTSEC-2026-0009`, `RUSTSEC-2026-0194`, and `RUSTSEC-2026-0195` are resolved. The new lopdf graph produces an informational `RUSTSEC-2026-0192` warning because `ttf-parser 0.25.1` is unmaintained; RustSec does not classify it as a vulnerability. Existing target-specific desktop maintenance/unsoundness warnings remain unchanged apart from this additional warning.
 
 ## Final recommendation
 
-Pending investigation: **NOT SAFE TO UPGRADE YET** until every decision criterion has been exercised.
+**NOT SAFE TO UPGRADE YET.**
+
+The code and golden evidence strongly support compatibility: no API or logic changes were needed, every automated test passes, golden observable behaviour is exactly unchanged, an explicit export is byte-identical, the bounded malformed corpus passes, performance is acceptable, the release application builds, and the target vulnerability is removed.
+
+However, the brief permits **SAFE TO UPGRADE** only after the requested representative real-world and hostile document coverage is exercised. Those source documents are not present in the workspace, particularly independent InDesign/Illustrator/transparency/encrypted/text-heavy/unusual-page-tree and corrupt-font/image cases. The upgrade should remain on this branch until that corpus is supplied and produces no panic, uncontrolled resource use, validation failure, or unexplained output/render difference.
+
+To reach **SAFE TO UPGRADE**, add sanitized representative PDFs for the missing categories, record provenance/type, run inspection and the applicable optimisation path under both baseline and 0.42, compare output structure/render/performance, and append the results here. If those pass, the exact merge consists of the `Cargo.toml` lopdf pin, both deliberate lockfile changes, this compatibility report, and the malformed-PDF regression test; the golden manifest must remain unchanged.
