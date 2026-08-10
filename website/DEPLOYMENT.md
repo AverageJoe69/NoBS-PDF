@@ -46,15 +46,17 @@ NOBS_RELEASE_VERSION=1.0.0
 LICENCE_ACTIVATION_LIMIT=2
 TRUST_PROXY_MODE=cloudflare-railway           # constrained Railway + Cloudflare proxy trust
 MACOS_RELEASE_ENABLED=false
-WINDOWS_RELEASE_ENABLED=true
+WINDOWS_RELEASE_ENABLED=false
 MACOS_DOWNLOAD_URL=
-WINDOWS_DOWNLOAD_URL=https://downloads.nobs-pdf.com/1.0.0/ACTUAL_WINDOWS_FILENAME.exe
+WINDOWS_DOWNLOAD_URL=
 ```
 
 Production startup fails closed for test Stripe keys, non-HTTPS origins,
-temporary/relative databases, the wrong release, no enabled platform, or a
-missing/unversioned download URL for an enabled platform. Disabled platforms
-do not require a URL and cannot expose a download entitlement or redirect.
+temporary/relative databases, the wrong release, or a missing/unversioned
+download URL for an enabled platform. A pre-release site may run with both
+platforms disabled; in that state checkout and downloads are unavailable.
+Disabled platforms do not require a URL and cannot expose a download entitlement
+or redirect.
 
 ## Database operations
 

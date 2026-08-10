@@ -23,5 +23,4 @@ RUN mkdir -p /var/lib/nobspdf && chown node:node /var/lib/nobspdf
 
 USER node
 EXPOSE 4242
-VOLUME ["/var/lib/nobspdf"]
 CMD ["node", "server/index.js"]
