@@ -72,6 +72,7 @@ function harness(session = paidSession()) {
       return typeof session.subscription === "object" ? session.subscription : ({ ...paidSession().subscription, id });
     } },
     invoices: { retrieve: async () => ({ subscription: typeof session.subscription === "object" ? session.subscription.id : session.subscription }) },
+    paymentIntents: { retrieve: async () => ({ payment_details: { order_reference: session.id } }) },
     billingPortal: { sessions: { create: async (params) => { calls.push({ portal: params }); return { url: "https://billing.stripe.test/session" }; } } },
   };
   return { app: createApp({ stripe, store, config }), store, calls };
@@ -259,6 +260,19 @@ test("refunded subscription is explicitly revoked and duplicate lifecycle event 
   assert.equal(second.body.duplicate, true);
   assert.equal(store.processedEventCount("evt_refunded"), 1);
   const key = store.findPurchaseBySession(session.id).licence_key;
+  assert.equal((await request(app).post("/api/license/activate").send(activationBody(key))).body.state, "REVOKED");
+});
+
+test("Managed Payments full refund maps PaymentIntent order reference to subscription; partial refund does not revoke", async (t) => {
+  const session = paidSession();
+  const { app, store } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_managed_refund_initial"));
+  const key = store.findPurchaseBySession(session.id).licence_key;
+  const partial = await deliver(app, signedWebhook("charge.refunded", { id: "ch_partial", refunded: false, payment_intent: "pi_managed" }, "evt_partial_refund"));
+  assert.equal(partial.status, 200);
+  assert.equal((await request(app).post("/api/license/activate").send(activationBody(key))).body.state, "ACTIVE");
+  const full = await deliver(app, signedWebhook("charge.refunded", { id: "ch_full", refunded: true, payment_intent: "pi_managed" }, "evt_full_refund"));
+  assert.equal(full.status, 200);
   assert.equal((await request(app).post("/api/license/activate").send(activationBody(key))).body.state, "REVOKED");
 });
 

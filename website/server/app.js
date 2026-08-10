@@ -133,6 +133,11 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
           const invoice = await stripe.invoices.retrieve(typeof object.invoice === "string" ? object.invoice : object.invoice.id);
           subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
         }
+        if (!subscriptionId && event.type === "charge.refunded" && object.payment_intent) {
+          const paymentIntent = await stripe.paymentIntents.retrieve(typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent.id);
+          const sessionId = paymentIntent.payment_details?.order_reference;
+          if (typeof sessionId === "string" && SESSION_ID.test(sessionId)) subscriptionId = store.findPurchaseBySession(sessionId)?.stripe_subscription_id;
+        }
         if (!subscriptionId) return res.json({ received: true, updated: false });
         subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price.product"] });
       }

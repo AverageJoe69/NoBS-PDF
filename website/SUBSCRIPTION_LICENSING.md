@@ -39,8 +39,10 @@ are acknowledged without applying the mutation twice.
   `cancel_at_period_end`, including cancellation scheduling and reversal.
 - `customer.subscription.deleted`: records terminal cancellation; access still
   lasts only through any remaining paid-through date.
-- `charge.refunded`: revokes the associated entitlement after resolving its
-  invoice and Subscription.
+- `charge.refunded`: a full refund revokes the associated entitlement after
+  resolving its invoice or Managed Payments PaymentIntent order reference and
+  Subscription. A partial refund does not automatically revoke the annual
+  entitlement; support can explicitly revoke it when policy requires.
 
 Subscribe the production endpoint `https://nobspdf.com/webhook` only to these
 events. Store its own live Dashboard `whsec_...` value as
