@@ -130,6 +130,16 @@ test("production requires a URL only for an explicitly enabled platform", () => 
   }), /WINDOWS_DOWNLOAD_URL/);
 });
 
+test("production permits a pre-release site with both platforms disabled", () => {
+  const result = loadConfig({
+    NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_live_example", STRIPE_WEBHOOK_SECRET: "whsec_example",
+    STRIPE_PRICE_ID: "price_example", APP_BASE_URL: "https://nobs-pdf.com", DATABASE_PATH: "/var/lib/nobspdf/nobs.sqlite",
+    NOBS_RELEASE_VERSION: "1.0.0", MACOS_RELEASE_ENABLED: "false", WINDOWS_RELEASE_ENABLED: "false",
+  });
+  assert.deepEqual(result.releases, { macOS: false, Windows: false });
+  assert.deepEqual(result.downloads, { macOS: "", Windows: "" });
+});
+
 test("Cloudflare and Railway proxy trust rejects caller-supplied forwarding hops", () => {
   assert.equal(trustCloudflareRailwayProxy("10.0.0.1", 0), true);
   assert.equal(trustCloudflareRailwayProxy("173.245.48.10", 1), true);
@@ -155,6 +165,16 @@ test("Checkout Session uses the configured annual subscription Price", async (t)
   assert.deepEqual(calls[0].automatic_tax, { enabled: true });
   assert.equal(calls[0].customer_creation, undefined);
   assert.match(calls[0].success_url, /session_id=\{CHECKOUT_SESSION_ID\}$/);
+});
+
+test("Checkout is unavailable when no platform has been released", async (t) => {
+  const unavailable = { ...config, releases: { macOS: false, Windows: false }, downloads: { macOS: "", Windows: "" } };
+  const { app, store, calls } = harness(paidSession(), unavailable); t.after(() => store.close());
+  const response = await request(app).post("/api/checkout").send({});
+  assert.equal(response.status, 503);
+  assert.equal(response.type, "application/json");
+  assert.match(response.body.error, /coming soon/i);
+  assert.equal(calls.length, 0);
 });
 
 test("invalid webhook signatures are rejected", async (t) => {

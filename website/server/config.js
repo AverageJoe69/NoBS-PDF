@@ -47,7 +47,6 @@ export function loadConfig(env = process.env) {
     if (appBaseUrl.protocol !== "https:" || ["localhost", "127.0.0.1"].includes(appBaseUrl.hostname) || appBaseUrl.hostname.endsWith(".test")) failures.push("APP_BASE_URL must be a production HTTPS origin");
     if (!env.DATABASE_PATH || !path.isAbsolute(env.DATABASE_PATH) || databasePath.startsWith("/tmp/")) failures.push("DATABASE_PATH must be an explicit absolute persistent path outside /tmp");
     if (releaseVersion !== RELEASE_VERSION) failures.push(`NOBS_RELEASE_VERSION must be ${RELEASE_VERSION}`);
-    if (!releases.macOS && !releases.Windows) failures.push("at least one platform release must be enabled");
     for (const [platform, name, value] of [["macOS", "MACOS_DOWNLOAD_URL", env.MACOS_DOWNLOAD_URL], ["Windows", "WINDOWS_DOWNLOAD_URL", env.WINDOWS_DOWNLOAD_URL]]) {
       if (!releases[platform]) continue;
       try {

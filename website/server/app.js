@@ -260,6 +260,9 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
   });
 
   app.post("/api/checkout", async (_req, res) => {
+    if (!config.releases.macOS && !config.releases.Windows) {
+      return res.status(503).json({ error: "NoBS PDF is coming soon. Checkout is not available yet." });
+    }
     try {
       const price = await stripe.prices.retrieve(config.stripePriceId);
       if (!isAnnualNoBsPrice(price, config.stripePriceId)) throw new Error("Configured Price is not the NoBS annual subscription.");

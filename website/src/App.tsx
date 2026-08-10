@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { content, siteConfig } from "./config";
 
 type Releases = { macOS: boolean; Windows: boolean };
-const windowsOnly: Releases = { macOS: false, Windows: true };
+const noReleases: Releases = { macOS: false, Windows: false };
 
 function platformSummary(releases: Releases) {
   const available = [releases.Windows && "Windows", releases.macOS && "macOS"].filter(Boolean);
@@ -17,7 +17,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function BuyButton({ className = "" }: { className?: string }) {
+function BuyButton({ available, className = "" }: { available: boolean; className?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function startCheckout() {
@@ -35,22 +35,22 @@ function BuyButton({ className = "" }: { className?: string }) {
   }
   return (
     <span className="buyWrap">
-      <button className={`button buttonPrimary ${className}`} disabled={loading} onClick={startCheckout}>
-        {loading ? "Opening secure checkout…" : "Subscribe to NoBS PDF"} <span aria-hidden="true">↗</span>
+      <button className={`button buttonPrimary ${className}`} disabled={loading || !available} onClick={startCheckout}>
+        {available ? (loading ? "Opening secure checkout…" : "Subscribe to NoBS PDF") : "Desktop apps coming soon"} {available && <span aria-hidden="true">↗</span>}
       </button>
       {error && <small role="alert">{error}</small>}
     </span>
   );
 }
 
-function Header() {
+function Header({ releases }: { releases: Releases }) {
   return (
     <header className="siteHeader shell">
       <Logo />
       <nav aria-label="Main navigation">
         <a href="#how">How it works</a><a href="#proof">Proof</a><a href="#pricing">Pricing</a>
       </nav>
-      <BuyButton className="headerBuy" />
+      <BuyButton available={releases.macOS || releases.Windows} className="headerBuy" />
     </header>
   );
 }
@@ -66,7 +66,7 @@ function Hero({ releases }: { releases: Releases }) {
         <p className="editorial">Intelligent PDF Optimisation</p>
         <h1>Smaller PDFs.<br /><span>Without the bullshit.</span></h1>
         <p className="lede">Intelligent PDF optimisation that actually understands what’s inside your document.</p>
-        <div className="heroActions"><BuyButton /><a className="button buttonText" href="#how">See how it works <span>↓</span></a></div>
+        <div className="heroActions"><BuyButton available={releases.macOS || releases.Windows} /><a className="button buttonText" href="#how">See how it works <span>↓</span></a></div>
         <p className="platforms">Available for {platformSummary(releases)} · macOS coming soon · Processes locally</p>
       </div>
       <div className="heroObject" aria-label="NoBS PDF application icon">
@@ -178,7 +178,7 @@ function Pricing({ releases }: { releases: Releases }) {
   return (
     <section className="pricing section" id="pricing"><div className="shell pricingGrid">
       <SectionIntro kicker="Simple pricing" title="One useful tool. One annual price."><p>£25 a year, tax included. No monthly plan, credits, tiers or pricing maze.</p></SectionIntro>
-      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}<small> / year</small></strong><p>Annual subscription. Cancel whenever you like.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>{platformSummary(releases)} · up to 2 devices</li><li>macOS coming soon</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton /></div>
+      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}<small> / year</small></strong><p>Annual subscription. Cancel whenever you like.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>{platformSummary(releases)} · up to 2 devices</li><li>Windows version coming soon</li><li>macOS version coming soon</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton available={releases.macOS || releases.Windows} /></div>
     </div></section>
   );
 }
@@ -199,8 +199,8 @@ function FAQ({ releases }: { releases: Releases }) {
   return <section className="faq section shell"><SectionIntro kicker="Questions, answered" title="Frequently asked. Plainly answered." /><div className="faqList">{faqs.map(([q, a], i) => <div className="faqItem" key={q}><button aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}><span>{q}</span><i>{open === i ? "−" : "+"}</i></button>{open === i && <p>{a}</p>}</div>)}</div></section>;
 }
 
-function FinalCTA() {
-  return <section className="finalCta section shell"><img src="/brand/nobs-icon-warm.svg" alt="" /><p className="editorial">Intelligent PDF Optimisation</p><h2>No more 60 MB PDFs.<br /><span>Make them make sense.</span></h2><BuyButton /></section>;
+function FinalCTA({ releases }: { releases: Releases }) {
+  return <section className="finalCta section shell"><img src="/brand/nobs-icon-warm.svg" alt="" /><p className="editorial">Intelligent PDF Optimisation</p><h2>No more 60 MB PDFs.<br /><span>Make them make sense.</span></h2><BuyButton available={releases.macOS || releases.Windows} /></section>;
 }
 
 function Footer() {
@@ -245,7 +245,7 @@ function DownloadPage() {
 }
 
 function Home() {
-  const [releases, setReleases] = useState<Releases>(windowsOnly);
+  const [releases, setReleases] = useState<Releases>(noReleases);
   useEffect(() => {
     void fetch("/api/config").then(async (response) => {
       if (!response.ok) return;
@@ -253,7 +253,7 @@ function Home() {
       if (typeof data.releases?.macOS === "boolean" && typeof data.releases?.Windows === "boolean") setReleases(data.releases);
     }).catch(() => undefined);
   }, []);
-  return <><Header /><main><Hero releases={releases} /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview releases={releases} /><Pricing releases={releases} /><FAQ releases={releases} /><FinalCTA /></main><Footer /></>;
+  return <><Header releases={releases} /><main><Hero releases={releases} /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview releases={releases} /><Pricing releases={releases} /><FAQ releases={releases} /><FinalCTA releases={releases} /></main><Footer /></>;
 }
 
 export default function App() {
