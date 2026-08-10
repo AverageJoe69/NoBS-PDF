@@ -8,7 +8,7 @@ use uuid::Uuid;
 const SERVICE: &str = "com.nobspdf.desktop";
 const CREDENTIAL_ACCOUNT: &str = "licence-activation";
 const DEVICE_ACCOUNT: &str = "device-identifier";
-const DEFAULT_API_URL: &str = "https://nobspdf.com";
+const DEFAULT_API_URL: &str = "https://nobs-pdf.com";
 const DAY_SECONDS: i64 = 24 * 60 * 60;
 const NORMAL_VERIFICATION_SECONDS: i64 = 30 * DAY_SECONDS;
 const OFFLINE_GRACE_SECONDS: i64 = 30 * DAY_SECONDS;

@@ -26,7 +26,7 @@ LICENCE_ACTIVATION_LIMIT=2
 
 The default and intended policy is two active devices per licence. The server is authoritative; the desktop does not contain this number.
 
-The desktop API origin is compiled into the Tauri binary. Production defaults to `https://nobspdf.com`. Override it for local development before compiling/running Tauri:
+The desktop API origin is compiled into the Tauri binary. Production defaults to `https://nobs-pdf.com`. Override it for local development before compiling/running Tauri:
 
 ```bash
 NOBS_LICENSE_API_URL=http://127.0.0.1:4242 npm run tauri:dev

@@ -1,6 +1,6 @@
 export const siteConfig = {
   platforms: ["macOS", "Windows"] as const,
-  supportEmail: "support@nobspdf.com",
+  supportEmail: "support@nobs-pdf.com",
   multiComputerPolicy: "Yes. One licence can be active on up to two devices at a time.",
 } as const;
 

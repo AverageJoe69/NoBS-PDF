@@ -79,7 +79,7 @@ No superficial advisory suppression or pre-parse check has been added. Until the
 6. **macOS Developer ID/notarization credentials are missing.** The locally produced `.app` is ad-hoc/linker signed, has no Team ID, and fails strict resource signature verification; it must not be distributed.
 7. **Windows Authenticode credentials are missing.** No signed Windows artifact has been produced.
 8. **Terms, Privacy, and Refund pages are links only.** Actual reviewed policies must be published.
-9. **Support address ownership is unverified.** Confirm that `support@nobspdf.com` is live and monitored.
+9. **Support address ownership is unverified.** Confirm that `support@nobs-pdf.com` is live and monitored.
 10. **A real Stripe Test-mode BUY → DOWNLOAD → ACTIVATE → USE test has not been possible without account credentials and webhook forwarding.**
 11. **Transactional purchase/licence email delivery is not configured.** The success page works, but customer access instructions also need a delivery provider before launch.
 
@@ -94,7 +94,7 @@ No superficial advisory suppression or pre-parse check has been added. Until the
 - absolute persistent `DATABASE_PATH` and backup destination/schedule
 - production host/container configuration and HTTPS reverse proxy
 - macOS and Windows HTTPS download URLs under `/1.0.0/`
-- confirmation that `support@nobspdf.com` works
+- confirmation that `support@nobs-pdf.com` works
 - email provider credentials and approved purchase/access email copy
 
 ### macOS signing and notarisation
@@ -151,7 +151,7 @@ Run on macOS after the production API and Apple credentials exist:
 ```bash
 cd "/Users/joeconway/NoBS PDF/desktop"
 npm ci
-export NOBS_LICENSE_API_URL=https://nobspdf.com
+export NOBS_LICENSE_API_URL=https://nobs-pdf.com
 export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR LEGAL NAME (TEAMID)'
 # Also export either the APPLE_API_* or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID
 # notarisation credential set described above.
@@ -161,7 +161,7 @@ npm run tauri:build:macos:release
 The release wrapper fails before building if it cannot find a real signing
 identity, if ad-hoc signing is requested, if notarisation credentials are
 absent, or if the Apple Silicon PDFium library is missing. The repository's
-authoritative production origin is currently `https://nobspdf.com`; its
+authoritative production origin is `https://nobs-pdf.com`; its
 licensing routes must be deployed and verified before this command is used for
 an RC.
 

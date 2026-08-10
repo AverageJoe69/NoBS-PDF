@@ -44,7 +44,7 @@ are acknowledged without applying the mutation twice.
   Subscription. A partial refund does not automatically revoke the annual
   entitlement; support can explicitly revoke it when policy requires.
 
-Subscribe the production endpoint `https://nobspdf.com/webhook` only to these
+Subscribe the production endpoint `https://nobs-pdf.com/webhook` only to these
 events. Store its own live Dashboard `whsec_...` value as
 `STRIPE_WEBHOOK_SECRET`; a Stripe CLI secret is not interchangeable.
 

@@ -3,6 +3,27 @@ import { createHash } from "node:crypto";
 import { LICENCE_PATTERN, normalizeLicenceKey } from "../shared/license.js";
 import { noOpLogger, safeReference } from "./logger.js";
 
+const CLOUDFLARE_IPV4 = [
+  ["173.245.48.0", 20], ["103.21.244.0", 22], ["103.22.200.0", 22], ["103.31.4.0", 22],
+  ["141.101.64.0", 18], ["108.162.192.0", 18], ["190.93.240.0", 20], ["188.114.96.0", 20],
+  ["197.234.240.0", 22], ["198.41.128.0", 17], ["162.158.0.0", 15], ["104.16.0.0", 13],
+  ["104.24.0.0", 14], ["172.64.0.0", 13], ["131.0.72.0", 22],
+];
+const CLOUDFLARE_IPV6 = [
+  ["2400:cb00::", 32], ["2606:4700::", 32], ["2803:f800::", 32], ["2405:b500::", 32],
+  ["2405:8100::", 32], ["2a06:98c0::", 29], ["2c0f:f248::", 32],
+];
+const cloudflareProxies = new (await import("node:net")).BlockList();
+for (const [network, prefix] of CLOUDFLARE_IPV4) cloudflareProxies.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of CLOUDFLARE_IPV6) cloudflareProxies.addSubnet(network, prefix, "ipv6");
+
+export function trustCloudflareRailwayProxy(ip, hop) {
+  if (hop === 0) return true; // Railway's immediate edge proxy.
+  const mapped = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  const family = mapped.includes(":") ? "ipv6" : "ipv4";
+  return cloudflareProxies.check(mapped, family);
+}
+
 const SESSION_ID = /^cs_(?:test_|live_)?[A-Za-z0-9]{8,}$/;
 const platforms = new Set(["macOS", "Windows"]);
 const clientPlatforms = new Set(["macos", "windows"]);
@@ -69,7 +90,7 @@ function publicPurchase(row) {
 export function createApp({ stripe, store, config, logger = noOpLogger }) {
   const app = express();
   app.disable("x-powered-by");
-  if (config.trustProxyHops) app.set("trust proxy", config.trustProxyHops);
+  if (config.trustProxyMode === "cloudflare-railway") app.set("trust proxy", trustCloudflareRailwayProxy);
   app.use((_req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",

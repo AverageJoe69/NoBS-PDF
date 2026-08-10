@@ -3,7 +3,7 @@ import test from "node:test";
 import Stripe from "stripe";
 import request from "supertest";
 import fs from "node:fs";
-import { createApp } from "../server/app.js";
+import { createApp, trustCloudflareRailwayProxy } from "../server/app.js";
 import { loadConfig } from "../server/config.js";
 import { generateLicenceKey } from "../server/license.js";
 import { createStore } from "../server/store.js";
@@ -109,12 +109,22 @@ test("production configuration rejects test keys, localhost, unsafe storage, and
 test("production configuration accepts explicit live HTTPS versioned values", () => {
   const result = loadConfig({
     NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_live_example", STRIPE_WEBHOOK_SECRET: "whsec_example",
-    STRIPE_PRICE_ID: "price_example", APP_BASE_URL: "https://nobspdf.com", DATABASE_PATH: "/var/lib/nobspdf/nobs.sqlite",
-    NOBS_RELEASE_VERSION: "1.0.0", MACOS_DOWNLOAD_URL: "https://downloads.nobspdf.com/1.0.0/app.dmg",
-    WINDOWS_DOWNLOAD_URL: "https://downloads.nobspdf.com/1.0.0/app.exe",
+    STRIPE_PRICE_ID: "price_example", APP_BASE_URL: "https://nobs-pdf.com", DATABASE_PATH: "/var/lib/nobspdf/nobs.sqlite",
+    NOBS_RELEASE_VERSION: "1.0.0", TRUST_PROXY_MODE: "cloudflare-railway", MACOS_DOWNLOAD_URL: "https://downloads.nobs-pdf.com/1.0.0/app.dmg",
+    WINDOWS_DOWNLOAD_URL: "https://downloads.nobs-pdf.com/1.0.0/app.exe",
   });
   assert.equal(result.production, true);
   assert.equal(result.releaseVersion, "1.0.0");
+  assert.equal(result.trustProxyMode, "cloudflare-railway");
+});
+
+test("Cloudflare and Railway proxy trust rejects caller-supplied forwarding hops", () => {
+  assert.equal(trustCloudflareRailwayProxy("10.0.0.1", 0), true);
+  assert.equal(trustCloudflareRailwayProxy("173.245.48.10", 1), true);
+  assert.equal(trustCloudflareRailwayProxy("2606:4700::1234", 1), true);
+  assert.equal(trustCloudflareRailwayProxy("203.0.113.10", 1), false);
+  assert.equal(trustCloudflareRailwayProxy("173.245.48.10", 2), true);
+  assert.equal(trustCloudflareRailwayProxy("198.51.100.7", 2), false);
 });
 
 test("licence keys are random and correctly formatted", () => {
