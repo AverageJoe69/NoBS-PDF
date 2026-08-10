@@ -77,7 +77,7 @@ No superficial advisory suppression or pre-parse check has been added. Until the
 4. **No deployed HTTPS API or durable production database is configured.** The service must run as one application instance with a persistent volume and backups.
 5. **No production download artifacts or HTTPS destinations are configured.** Both URLs must be namespaced under `/1.0.0/`.
 6. **macOS Developer ID/notarization credentials are missing.** The locally produced `.app` is ad-hoc/linker signed, has no Team ID, and fails strict resource signature verification; it must not be distributed.
-7. **Windows Authenticode credentials are missing.** No signed Windows artifact has been produced.
+7. **Windows artifact is not yet produced or packaged-tested.** Windows signing is explicitly optional for v1; record the expected SmartScreen/unknown-publisher warning during testing.
 8. **Terms, Privacy, and Refund pages are links only.** Actual reviewed policies must be published.
 9. **Support address ownership is unverified.** Confirm that `support@nobs-pdf.com` is live and monitored.
 10. **A real Stripe Test-mode BUY → DOWNLOAD → ACTIVATE → USE test has not been possible without account credentials and webhook forwarding.**
@@ -178,7 +178,7 @@ Do not distribute an ad-hoc-signed artifact. Tauri enables hardened runtime in `
 
 ### Windows release
 
-Run on Windows after placing the matching revision-7350 DLL at `vendor/pdfium/bin/pdfium.dll`, or use the checksum-verifying Windows RC workflow. Production output must be signed through the configured Artifact Signing pipeline or an equivalent trusted certificate:
+Run on Windows after placing the matching revision-7350 DLL at `vendor/pdfium/bin/pdfium.dll`, or use the checksum-verifying Windows RC workflow. Windows v1 may be unsigned; record the expected SmartScreen/unknown-publisher warning during packaged testing:
 
 ```powershell
 cd "C:\path\to\NoBS PDF\desktop"

@@ -5,12 +5,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  build-sign-verify:
+  build-package-test:
     runs-on: windows-2025
-    environment: windows-rc
     env:
       NOBS_LICENSE_API_URL: https://nobs-pdf.com
       PDFIUM_ARCHIVE_SHA256: 0289ee5f6beaa001c1fa0fc96dfdbc2f0238cd4b1cfc72a75ac473fa191dfbe6
@@ -73,62 +71,46 @@ jobs:
         shell: pwsh
         run: npm run tauri -- build --no-bundle --config src-tauri/tauri.windows.conf.json --target $env:WINDOWS_TARGET
 
-      - name: Authenticate to Azure with GitHub OIDC
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sign application executable
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-          files: ${{ github.workspace }}\desktop\src-tauri\target\x86_64-pc-windows-msvc\release\nobs-pdf-desktop.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Verify application signature
-        shell: pwsh
-        run: |
-          $path = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\nobs-pdf-desktop.exe"
-          $signature = Get-AuthenticodeSignature $path
-          if ($signature.Status -ne "Valid") { throw "Application signature is $($signature.Status)" }
-
       - name: Bundle NSIS installer
         working-directory: desktop
         shell: pwsh
         run: npm run tauri -- bundle --bundles nsis --config src-tauri/tauri.windows.conf.json --target $env:WINDOWS_TARGET --ci
 
-      - name: Sign NSIS installer
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis
-          files-folder-filter: exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Verify and name signed installer
+      - name: Install and launch packaged application
         shell: pwsh
         run: |
           $folder = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
           $installer = Get-ChildItem $folder -Filter "*-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not produced" }
           $signature = Get-AuthenticodeSignature $installer.FullName
-          if ($signature.Status -ne "Valid") { throw "Installer signature is $($signature.Status)" }
+          Write-Host "Expected unsigned v1 installer status: $($signature.Status)"
+          $installRoot = Join-Path $env:RUNNER_TEMP "NoBS-PDF-installed"
+          $process = Start-Process $installer.FullName -ArgumentList "/S", "/D=$installRoot" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "NSIS installation failed with exit code $($process.ExitCode)" }
+          $application = Get-ChildItem $installRoot -Filter "*.exe" -Recurse | Where-Object Name -NotLike "uninstall*" | Select-Object -First 1
+          if (-not $application) { throw "Installed application executable was not found" }
+          if (-not (Test-Path (Join-Path $application.DirectoryName "pdfium.dll"))) { throw "Installed application is missing pdfium.dll" }
+          $app = Start-Process $application.FullName -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) { throw "Installed application exited unexpectedly with code $($app.ExitCode)" }
+          Stop-Process -Id $app.Id -Force
           Move-Item $installer.FullName (Join-Path $folder "NoBS-PDF-1.0.0-Windows-x64-setup.exe")
 
-      - name: Upload signed RC artifact
+      - name: Record installer checksum
+        shell: pwsh
+        run: |
+          $path = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis\NoBS-PDF-1.0.0-Windows-x64-setup.exe"
+          $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  NoBS-PDF-1.0.0-Windows-x64-setup.exe" | Out-File "$path.sha256" -Encoding ascii
+          Write-Host "Installer SHA-256: $hash"
+          Write-Host "Installer bytes: $((Get-Item $path).Length)"
+
+      - name: Upload unsigned Windows RC artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoBS-PDF-1.0.0-Windows-x64-signed
-          path: desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe
+          name: NoBS-PDF-1.0.0-Windows-x64-unsigned
+          path: |
+            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe
+            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14

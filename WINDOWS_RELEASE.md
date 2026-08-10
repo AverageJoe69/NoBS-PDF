@@ -34,41 +34,23 @@ only the local licence gate and never sends document data to the licensing API.
 
 ## Production signing
 
-Unsigned installers must never be published. The prepared GitHub workflow uses
-Microsoft Azure Artifact Signing (formerly Trusted Signing) Public Trust and
-OIDC. It signs the application executable before bundling, signs the completed
-NSIS installer, verifies both Authenticode signatures, and only then uploads a
-private workflow artifact.
-
-Required Azure/GitHub configuration:
-
-1. An Azure Artifact Signing account with verified identity and a Public Trust
-   certificate profile.
-2. An Entra application/service principal assigned the **Artifact Signing
-   Certificate Profile Signer** role on that profile.
-3. An OIDC federated credential restricted to this repository and the chosen
-   GitHub environment/ref.
-4. GitHub Actions secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
-   `AZURE_SUBSCRIPTION_ID`.
-5. GitHub Actions variables: `AZURE_ARTIFACT_SIGNING_ENDPOINT`,
-   `AZURE_ARTIFACT_SIGNING_ACCOUNT`, and
-   `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE`.
+Windows code signing is explicitly not a v1 release requirement. The expected
+Microsoft SmartScreen / unknown-publisher warning is documented and accepted;
+it is not a test failure. The workflow records the Authenticode status but does
+not require or configure a certificate.
 
 For a conventional CA certificate instead, Tauri supports a SHA-256
 `certificateThumbprint` for a certificate installed in the Windows certificate
 store. A password-protected PKCS#12/PFX can be imported into the runner from
 encrypted GitHub secrets. Do not commit either the PFX or its password.
 
-EV is not required merely for SmartScreen: Microsoft now applies the same
-reputation-building model to EV, OV, and Artifact Signing. For a UK
-organization, Azure Artifact Signing Public Trust is the preferred managed
-option. A UK individual is not currently eligible for Public Trust and should
-use an OV certificate from a trusted CA or the Microsoft Store route.
+Signing can be added in a future release without changing the NSIS format. No
+signing service, certificate, or signing secret is configured for v1.
 
 ## Release gates
 
-After a signed installer is produced, install it on a clean Windows machine and
+After an installer is produced, install it on a clean Windows machine and
 run the complete packaged PDF corpus and error/licensing matrix. Only a signed
 installer that passes that matrix may be uploaded to a draft/prerelease asset
-and used as `WINDOWS_DOWNLOAD_URL`. Do not create final `v1.0.0` from this
-workflow.
+and used as `WINDOWS_DOWNLOAD_URL`. Record the accepted unsigned-publisher
+warning. Do not create final `v1.0.0` from this workflow.
