@@ -108,7 +108,15 @@ On startup, the app checks the native credential store. A locally active credent
 
 PDF inspection, estimation, and optimisation commands also check for an active local credential, preventing a bypass of the React screen. They do not perform network requests and no optimisation code was changed.
 
-The present implementation revalidates once at application startup. It does not require an internet connection per PDF or per optimisation.
+The desktop performs a cheap local due-check after launch and once per hour while
+it remains open. A network verification is attempted only when the last
+successful verification is approximately 30 days old (with deterministic
+per-activation jitter of up to 24 hours), or when a scheduled retry is due.
+Transient failures retry after approximately one day, then three days, then
+weekly. They never expire or downgrade a locally active one-time-purchase
+licence. Only the expected authenticated `401 INVALID` or `403 REVOKED`
+protocol response changes local activation state. It does not require an
+internet connection per PDF or per optimisation.
 
 ## Local development and manual test
 

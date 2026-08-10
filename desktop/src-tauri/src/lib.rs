@@ -130,3 +130,35 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running NoBS PDF");
 }
+
+#[cfg(test)]
+mod licensing_boundary_tests {
+    #[test]
+    fn pdf_commands_only_use_the_local_licence_gate() {
+        let source = include_str!("lib.rs");
+        for (function, next) in [
+            (
+                "async fn inspect_pdf",
+                "#[tauri::command]\nasync fn estimate_pdf",
+            ),
+            (
+                "async fn estimate_pdf",
+                "#[tauri::command]\nasync fn optimise_pdf",
+            ),
+            ("async fn optimise_pdf", "fn pdfium_library_name"),
+        ] {
+            let body = source
+                .split_once(function)
+                .unwrap()
+                .1
+                .split_once(next)
+                .unwrap()
+                .0;
+            assert!(body.contains("require_licence()?"));
+            assert!(!body.contains("revalidate"));
+            assert!(!body.contains("activate_licence"));
+            assert!(!body.contains("api/license"));
+            assert!(!body.contains("reqwest"));
+        }
+    }
+}

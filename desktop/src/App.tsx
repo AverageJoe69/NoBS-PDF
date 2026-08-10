@@ -27,6 +27,7 @@ const labels: Record<Stage, string> = {
   rebuilding: "Rebuilding PDF…",
   validating: "Validating output…",
 };
+const LICENCE_DUE_CHECK_MILLISECONDS = 60 * 60 * 1000;
 const formatBytes = (value: number) =>
   new Intl.NumberFormat(undefined, {
     style: "unit",
@@ -582,14 +583,30 @@ export default function App() {
   const [licence, setLicence] = useState<LicenceStatus | null>(null);
   const [settings, setSettings] = useState(false);
   useEffect(() => {
+    let active = true;
+    const checkIfDue = () => {
+      void invoke<LicenceStatus>("revalidate_licence").then((remote) => {
+        if (
+          active &&
+          (remote.state === "REVOKED" ||
+            (remote.state === "INVALID" && !remote.locallyActivated))
+        ) {
+          setLicence(remote);
+        }
+      });
+    };
     void invoke<LicenceStatus>("get_licence_status").then((local) => {
+      if (!active) return;
       setLicence(local);
       if (local.state === "ACTIVE") {
-        void invoke<LicenceStatus>("revalidate_licence").then((remote) => {
-          if (remote.state === "REVOKED" || (remote.state === "INVALID" && !remote.locallyActivated)) setLicence(remote);
-        });
+        checkIfDue();
       }
     });
+    const interval = window.setInterval(checkIfDue, LICENCE_DUE_CHECK_MILLISECONDS);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
   if (!licence) return <main className="activationPage"><Brand /><div className="licenceLoading">Checking activation…</div></main>;
   const usable = licence.state === "ACTIVE" || (licence.state === "NETWORK_ERROR" && licence.locallyActivated);
