@@ -37,7 +37,7 @@ Configure these values in the hosting provider, never in a committed `.env`:
 NODE_ENV=production
 STRIPE_SECRET_KEY=sk_live_...                 # Stripe live secret key
 STRIPE_WEBHOOK_SECRET=whsec_...               # secret for the production webhook below
-STRIPE_PRICE_ID=price_...                     # live one-time NoBS PDF Price
+STRIPE_PRICE_ID=price_...                     # live GBP 25/year inclusive-tax recurring Price
 APP_BASE_URL=https://nobspdf.com
 HOST=0.0.0.0
 PORT=4242                                     # use a provider-injected PORT if required
@@ -65,11 +65,10 @@ launch. The server creates and migrates its schema on startup.
 
 ## Stripe production setup
 
-1. Create or select the live, one-time NoBS PDF Price and set its `price_...`
+1. Create or select the live GBP 25/year, inclusive-tax recurring NoBS PDF Price and set its `price_...`
    value as `STRIPE_PRICE_ID`.
 2. Create a live webhook endpoint at `https://nobspdf.com/webhook`.
-3. Subscribe only to `checkout.session.completed` and
-   `checkout.session.async_payment_succeeded`.
+3. Subscribe to the event set documented in `SUBSCRIPTION_LICENSING.md`.
 4. Store that endpoint's `whsec_...` value as `STRIPE_WEBHOOK_SECRET`.
 5. Confirm signed live/test-mode events never share credentials or objects.
 6. Complete a real purchase and retain only redacted Stripe event/session

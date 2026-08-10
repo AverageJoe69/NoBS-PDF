@@ -21,22 +21,28 @@ const config = {
 };
 
 function paidSession(overrides = {}) {
+  const subscription = {
+    id: "sub_test_123", status: "active", cancel_at_period_end: false,
+    current_period_end: Math.floor(Date.now() / 1000) + 365 * 86400,
+    items: { data: [{ price: { id: "price_nobs_test", product: { id: "prod_nobs_test" } } }] },
+  };
   return {
     id: "cs_test_1234567890",
     created: 1_700_000_000,
     payment_status: "paid",
+    mode: "subscription",
     customer_details: { email: "buyer@example.com" },
     customer: "cus_test_123",
-    payment_intent: "pi_test_123",
-    line_items: { data: [{ price: { id: "price_nobs_test", product: { id: "prod_nobs_test" } } }] },
+    subscription,
     ...overrides,
   };
 }
 
 function seedLicence(store, suffix = "seed", state = {}) {
-  const result = store.recordPurchase({ id: `evt_${suffix}`, type: "checkout.session.completed" }, {
+  const result = store.recordSubscription({ id: `evt_${suffix}`, type: "checkout.session.completed" }, {
     customerEmail: "buyer@example.com", stripeCustomerId: "cus_test", checkoutSessionId: `cs_test_${suffix}12345678`,
-    paymentIntentId: "pi_test", productId: "prod_nobs_test", priceId: "price_nobs_test",
+    paymentIntentId: null, productId: "prod_nobs_test", priceId: "price_nobs_test", subscriptionId: `sub_${suffix}`,
+    subscriptionStatus: "active", currentPeriodEnd: new Date(Date.now() + 365 * 86400_000).toISOString(), cancelAtPeriodEnd: false,
     purchaseTimestamp: new Date().toISOString(), releaseVersion: "1.0.0",
   });
   const key = result.purchase.licence_key;
@@ -53,11 +59,14 @@ function harness(session = paidSession()) {
   const calls = [];
   const stripe = {
     webhooks: stripeSdk.webhooks,
-    prices: { retrieve: async () => ({ currency: "gbp", unit_amount: 4900, product: { name: "NoBS PDF" } }) },
+    prices: { retrieve: async () => ({ id: "price_nobs_test", active: true, currency: "gbp", unit_amount: 2500, type: "recurring", recurring: { interval: "year", interval_count: 1 }, tax_behavior: "inclusive", product: { name: "NoBS PDF" } }) },
     checkout: { sessions: {
       create: async (params) => { calls.push(params); return { id: "cs_test_created123", url: "https://checkout.stripe.test/session" }; },
       retrieve: async () => session,
     } },
+    subscriptions: { retrieve: async (id) => typeof session.subscription === "object" ? session.subscription : ({ ...paidSession().subscription, id }) },
+    invoices: { retrieve: async () => ({ subscription: typeof session.subscription === "object" ? session.subscription.id : session.subscription }) },
+    billingPortal: { sessions: { create: async (params) => { calls.push({ portal: params }); return { url: "https://billing.stripe.test/session" }; } } },
   };
   return { app: createApp({ stripe, store, config }), store, calls };
 }
@@ -66,6 +75,16 @@ function signedEvent(session = paidSession(), eventId = "evt_test_123") {
   const payload = JSON.stringify({ id: eventId, type: "checkout.session.completed", data: { object: { id: session.id } } });
   const signature = stripeSdk.webhooks.generateTestHeaderString({ payload, secret: signingSecret });
   return { payload, signature };
+}
+
+function signedWebhook(type, object, eventId) {
+  const payload = JSON.stringify({ id: eventId, type, data: { object } });
+  const signature = stripeSdk.webhooks.generateTestHeaderString({ payload, secret: signingSecret });
+  return { payload, signature };
+}
+
+async function deliver(app, event) {
+  return request(app).post("/webhook").set("stripe-signature", event.signature).set("content-type", "application/json").send(event.payload);
 }
 
 test("missing environment variables produce a clear error", () => {
@@ -97,14 +116,15 @@ test("licence keys are random and correctly formatted", () => {
   for (const key of keys) assert.match(key, /^NOBS-[A-F0-9]{4}(?:-[A-F0-9]{4}){3}$/);
 });
 
-test("Checkout Session uses the configured one-time Price", async (t) => {
+test("Checkout Session uses the configured annual subscription Price", async (t) => {
   const { app, store, calls } = harness(); t.after(() => store.close());
   const response = await request(app).post("/api/checkout").send({});
   assert.equal(response.status, 201);
   assert.equal(response.body.url, "https://checkout.stripe.test/session");
-  assert.equal(calls[0].mode, "payment");
+  assert.equal(calls[0].mode, "subscription");
   assert.deepEqual(calls[0].line_items, [{ price: config.stripePriceId, quantity: 1 }]);
-  assert.equal(calls[0].customer_creation, "always");
+  assert.deepEqual(calls[0].automatic_tax, { enabled: true });
+  assert.equal(calls[0].customer_creation, undefined);
   assert.match(calls[0].success_url, /session_id=\{CHECKOUT_SESSION_ID\}$/);
 });
 
@@ -124,11 +144,13 @@ test("valid paid checkout.session.completed creates a purchase and licence", asy
   const purchase = store.findPurchaseBySession(session.id);
   assert.equal(purchase.customer_email, "buyer@example.com");
   assert.equal(purchase.stripe_customer_id, "cus_test_123");
-  assert.equal(purchase.stripe_payment_intent_id, "pi_test_123");
+  assert.equal(purchase.stripe_subscription_id, "sub_test_123");
   assert.equal(purchase.stripe_product_id, "prod_nobs_test");
   assert.equal(purchase.stripe_price_id, "price_nobs_test");
   assert.equal(purchase.activation_status, "inactive");
   assert.equal(purchase.activation_count, 0);
+  assert.equal(purchase.subscription_status, "active");
+  assert.ok(Date.parse(purchase.current_period_end) > Date.now());
   assert.match(purchase.licence_key, /^NOBS-/);
 });
 
@@ -143,6 +165,80 @@ test("duplicate webhook delivery does not create a second licence", async (t) =>
   assert.equal(second.body.duplicate, true);
   assert.equal(store.findPurchaseBySession(session.id).licence_key, licence);
   assert.equal(store.processedEventCount("evt_duplicate_123"), 1);
+});
+
+test("wrong Stripe Price does not create subscription entitlement", async (t) => {
+  const session = paidSession();
+  session.subscription.items.data[0].price.id = "price_wrong";
+  const { app, store } = harness(session); t.after(() => store.close());
+  const response = await deliver(app, signedEvent(session, "evt_wrong_price"));
+  assert.equal(response.status, 400);
+  assert.equal(store.findPurchaseBySession(session.id), null);
+});
+
+test("annual renewal extends paid-through; failed renewal does not; recovery does", async (t) => {
+  const session = paidSession();
+  const { app, store } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_initial_subscription"));
+  const initial = store.findPurchaseBySession(session.id).current_period_end;
+
+  session.subscription.current_period_end += 365 * 86400;
+  const renewal = await deliver(app, signedWebhook("invoice.paid", { id: "in_renewal", subscription: session.subscription.id }, "evt_renewal"));
+  assert.equal(renewal.status, 200);
+  const renewed = store.findPurchaseBySession(session.id).current_period_end;
+  assert.ok(Date.parse(renewed) > Date.parse(initial));
+
+  session.subscription.current_period_end -= 100;
+  await deliver(app, signedWebhook("invoice.payment_failed", { id: "in_failed", subscription: session.subscription.id }, "evt_failed"));
+  const failed = store.findPurchaseBySession(session.id);
+  assert.equal(failed.subscription_status, "past_due");
+  assert.equal(failed.current_period_end, renewed);
+
+  session.subscription.status = "active";
+  session.subscription.current_period_end += 400 * 86400;
+  await deliver(app, signedWebhook("invoice.paid", { id: "in_recovered", subscription: session.subscription.id }, "evt_recovered"));
+  const recovered = store.findPurchaseBySession(session.id);
+  assert.equal(recovered.subscription_status, "active");
+  assert.ok(Date.parse(recovered.current_period_end) > Date.parse(renewed));
+});
+
+test("cancellation at period end stays active until paid-through, then expires", async (t) => {
+  const session = paidSession();
+  const { app, store } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_cancel_initial"));
+  const key = store.findPurchaseBySession(session.id).licence_key;
+  const activation = await request(app).post("/api/license/activate").send(activationBody(key));
+  assert.equal(activation.status, 201);
+
+  session.subscription.cancel_at_period_end = true;
+  await deliver(app, signedWebhook("customer.subscription.updated", session.subscription, "evt_cancel_scheduled"));
+  const stillActive = await request(app).post("/api/license/verify").set("authorization", `Bearer ${activation.body.activation_token}`).send({ activation_id: activation.body.activation_id });
+  assert.equal(stillActive.status, 200);
+  assert.equal(stillActive.body.cancel_at_period_end, true);
+
+  session.subscription.status = "canceled";
+  await deliver(app, signedWebhook("customer.subscription.deleted", session.subscription, "evt_cancelled"));
+  const paidTerm = await request(app).post("/api/license/verify").set("authorization", `Bearer ${activation.body.activation_token}`).send({ activation_id: activation.body.activation_id });
+  assert.equal(paidTerm.status, 200);
+
+  store.setLicenceState(key, { subscriptionStatus: "canceled", currentPeriodEnd: new Date(Date.now() - 1000).toISOString() });
+  const expired = await request(app).post("/api/license/verify").set("authorization", `Bearer ${activation.body.activation_token}`).send({ activation_id: activation.body.activation_id });
+  assert.equal(expired.status, 403);
+  assert.equal(expired.body.state, "EXPIRED");
+});
+
+test("refunded subscription is explicitly revoked and duplicate lifecycle event is idempotent", async (t) => {
+  const session = paidSession();
+  const { app, store } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_refund_initial"));
+  const refund = signedWebhook("charge.refunded", { id: "ch_refunded", refunded: true, invoice: "in_refunded" }, "evt_refunded");
+  const first = await deliver(app, refund);
+  const second = await deliver(app, refund);
+  assert.equal(first.status, 200);
+  assert.equal(second.body.duplicate, true);
+  assert.equal(store.processedEventCount("evt_refunded"), 1);
+  const key = store.findPurchaseBySession(session.id).licence_key;
+  assert.equal((await request(app).post("/api/license/activate").send(activationBody(key))).body.state, "REVOKED");
 });
 
 test("verified purchase can be retrieved and download is authorized", async (t) => {
@@ -160,6 +256,17 @@ test("verified purchase can be retrieved and download is authorized", async (t) 
   assert.equal(download.headers.location, config.downloads.macOS);
 });
 
+test("verified subscriber can open Stripe hosted Customer Portal without customer data exposure", async (t) => {
+  const session = paidSession();
+  const { app, store, calls } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_portal"));
+  const response = await request(app).post("/api/billing/portal").send({ session_id: session.id });
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.body, { url: "https://billing.stripe.test/session" });
+  assert.equal(calls.at(-1).portal.customer, session.customer);
+  assert.equal(response.body.stripe_customer_id, undefined);
+});
+
 test("unpaid or unknown purchase cannot retrieve licence or download", async (t) => {
   const session = paidSession({ payment_status: "unpaid" });
   const { app, store } = harness(session); t.after(() => store.close());
@@ -168,6 +275,16 @@ test("unpaid or unknown purchase cannot retrieve licence or download", async (t)
   assert.equal(webhook.body.fulfilled, false);
   assert.equal((await request(app).get(`/api/purchases/${session.id}`)).status, 202);
   assert.equal((await request(app).get(`/api/download/mac?session_id=${session.id}`)).status, 403);
+});
+
+test("incomplete subscription does not create entitlement even if Checkout reports paid", async (t) => {
+  const session = paidSession();
+  session.subscription.status = "incomplete";
+  const { app, store } = harness(session); t.after(() => store.close());
+  const response = await deliver(app, signedEvent(session, "evt_incomplete"));
+  assert.equal(response.status, 200);
+  assert.equal(response.body.fulfilled, false);
+  assert.equal(store.findPurchaseBySession(session.id), null);
 });
 
 test("licence input normalization tolerates case, spaces, and hyphens", () => {
@@ -228,8 +345,8 @@ test("malformed activation requests are rejected", async (t) => {
 test("invalid, unpaid, and revoked licences cannot activate", async (t) => {
   const { app, store } = harness(); t.after(() => store.close());
   assert.equal((await request(app).post("/api/license/activate").send(activationBody("NOBS-AB12-CD34-EF56-7890"))).status, 404);
-  const unpaid = seedLicence(store, "unpaid", { paymentStatus: "unpaid" });
-  assert.equal((await request(app).post("/api/license/activate").send(activationBody(unpaid))).status, 404);
+  const unpaid = seedLicence(store, "unpaid", { currentPeriodEnd: new Date(Date.now() - 1000).toISOString(), subscriptionStatus: "past_due" });
+  assert.equal((await request(app).post("/api/license/activate").send(activationBody(unpaid))).status, 403);
   const revoked = seedLicence(store, "revoked", { licenceStatus: "revoked" });
   const response = await request(app).post("/api/license/activate").send(activationBody(revoked));
   assert.equal(response.status, 403);
@@ -254,7 +371,7 @@ test("complete licence lifecycle activates, verifies, deactivates, and invalidat
   const activation = await request(app).post("/api/license/activate").send(activationBody(key));
   assert.equal(activation.status, 201);
   assert.deepEqual(Object.keys(activation.body).sort(), [
-    "activation_id", "activation_token", "license_id", "platform", "release_version", "state", "valid",
+    "activation_id", "activation_token", "cancel_at_period_end", "entitlement_state", "license_id", "paid_through", "platform", "release_version", "state", "valid",
   ]);
 
   const authorization = `Bearer ${activation.body.activation_token}`;
@@ -264,9 +381,12 @@ test("complete licence lifecycle activates, verifies, deactivates, and invalidat
   assert.deepEqual(verified.body, {
     valid: true,
     state: "ACTIVE",
+    entitlement_state: "ACTIVE",
     activation_id: activation.body.activation_id,
     release_version: "1.0.0",
     platform: "macos",
+    paid_through: activation.body.paid_through,
+    cancel_at_period_end: false,
   });
 
   const deactivated = await request(app).post("/api/license/deactivate").set("authorization", authorization)

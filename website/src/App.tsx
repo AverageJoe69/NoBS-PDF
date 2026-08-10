@@ -28,7 +28,7 @@ function BuyButton({ className = "" }: { className?: string }) {
   return (
     <span className="buyWrap">
       <button className={`button buttonPrimary ${className}`} disabled={loading} onClick={startCheckout}>
-        {loading ? "Opening secure checkout…" : "Buy NoBS PDF"} <span aria-hidden="true">↗</span>
+        {loading ? "Opening secure checkout…" : "Subscribe to NoBS PDF"} <span aria-hidden="true">↗</span>
       </button>
       {error && <small role="alert">{error}</small>}
     </span>
@@ -169,8 +169,8 @@ function Pricing() {
   }, []);
   return (
     <section className="pricing section" id="pricing"><div className="shell pricingGrid">
-      <SectionIntro kicker="Simple pricing" title="Buy it once. Use it whenever you need it."><p>No monthly fee. No credits. No pricing maze.</p></SectionIntro>
-      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}</strong><p>One purchase. Unlimited use of this release.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>macOS and Windows</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton /></div>
+      <SectionIntro kicker="Simple pricing" title="One useful tool. One annual price."><p>£25 a year, tax included. No monthly plan, credits, tiers or pricing maze.</p></SectionIntro>
+      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}<small> / year</small></strong><p>Annual subscription. Cancel whenever you like.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>macOS and Windows · up to 2 devices</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton /></div>
     </div></section>
   );
 }
@@ -181,7 +181,7 @@ const faqs = [
   ["Does it preserve selectable text?", "Yes, selectable text can be kept separate when the preservation option is enabled."],
   ["Does it change image aspect ratios?", "NoBS preserves image aspect ratios during optimisation."],
   ["Does my PDF leave my computer?", "NoBS processes PDFs locally. Your document does not need to be uploaded to a server for optimisation."],
-  ["Is this a subscription?", "No. It is one purchase with unlimited use of this release."],
+  ["Is this a subscription?", "Yes. NoBS PDF is £25 per year, including applicable tax. You can cancel through Stripe and keep using it until the end of your paid term."],
   ["Does it work on Windows?", "Yes. NoBS PDF is intended for macOS and Windows."],
   ["Can I use it on multiple computers?", siteConfig.multiComputerPolicy],
 ] as const;
@@ -204,6 +204,16 @@ function DownloadPage() {
   const [state, setState] = useState<"loading" | "complete" | "error">("loading");
   const [purchase, setPurchase] = useState<{ email: string; licenceKey: string; releaseVersion: string } | null>(null);
   const [message, setMessage] = useState("Confirming your payment…");
+  const [portalError, setPortalError] = useState("");
+  async function manageBilling() {
+    setPortalError("");
+    try {
+      const response = await fetch("/api/billing/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId }) });
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error || "Billing management is unavailable.");
+      window.location.assign(data.url);
+    } catch (error) { setPortalError(error instanceof Error ? error.message : "Billing management is unavailable."); }
+  }
   useEffect(() => {
     if (!sessionId) { setState("error"); setMessage("This download link is missing its secure purchase reference."); return; }
     let cancelled = false;
@@ -223,7 +233,7 @@ function DownloadPage() {
   }, [sessionId]);
 
   if (state !== "complete" || !purchase) return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">{state === "loading" ? "…" : "!"}</span><p className="kicker">PAYMENT CONFIRMATION</p><h1>{state === "loading" ? "Just a moment." : "We can’t show the download yet."}</h1><p>{message}</p><a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
-  return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">✓</span><p className="kicker">PURCHASE COMPLETE</p><h1>You’re in.</h1><p>NoBS PDF is ready for <strong>{purchase.email}</strong>.</p><div className="licence"><small>YOUR LICENCE KEY</small><code>{purchase.licenceKey}</code></div><div><a className="button buttonPrimary" href={`/api/download/mac?session_id=${encodeURIComponent(sessionId)}`}>Download for Mac</a><a className="button buttonPrimary" href={`/api/download/windows?session_id=${encodeURIComponent(sessionId)}`}>Download for Windows</a></div><small>Your licence gives you unlimited use of release {purchase.releaseVersion}.</small><a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
+  return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">✓</span><p className="kicker">SUBSCRIPTION ACTIVE</p><h1>You’re in.</h1><p>NoBS PDF is ready for <strong>{purchase.email}</strong>.</p><div className="licence"><small>YOUR LICENCE KEY</small><code>{purchase.licenceKey}</code></div><div><a className="button buttonPrimary" href={`/api/download/mac?session_id=${encodeURIComponent(sessionId)}`}>Download for Mac</a><a className="button buttonPrimary" href={`/api/download/windows?session_id=${encodeURIComponent(sessionId)}`}>Download for Windows</a></div><small>Your annual subscription covers release {purchase.releaseVersion} on up to two devices.</small><button className="backHome" onClick={() => void manageBilling()}>Manage subscription ↗</button>{portalError && <small role="alert">{portalError}</small>}<a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
 }
 
 export default function App() {

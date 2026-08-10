@@ -1,6 +1,6 @@
 # NoBS PDF licensing and desktop activation
 
-NoBS PDF uses a deliberately small activation system. Stripe remains responsible for payment; the NoBS server is authoritative for purchase, entitlement, revocation, and activation limits. The desktop app stores an opaque activation credential in the operating system credential store and works offline after successful first activation.
+NoBS PDF uses a deliberately small activation system. Stripe remains responsible for subscription/payment state; the NoBS server projects paid-through entitlement, revocation, and activation limits. The desktop app stores an opaque activation credential and paid-through timestamp in the operating system credential store and works offline through the paid period plus a 30-day grace. See `SUBSCRIPTION_LICENSING.md`.
 
 ## Flow
 
@@ -47,7 +47,7 @@ Use an HTTPS production origin. Do not compile server secrets into the desktop a
 }
 ```
 
-The endpoint normalises and validates the key, limits JSON requests to 32 KB, applies an in-memory per-IP activation rate limit, verifies the paid purchase and licence status, enforces major-release entitlement, and enforces the active-device limit. A successful response contains only licence/activation identifiers, an opaque activation token, entitled release, and platform. It contains no email or Stripe payment data.
+The endpoint normalises and validates the key, limits JSON requests to 32 KB, applies an in-memory per-IP activation rate limit, verifies the paid subscription period and licence status, enforces major-release entitlement, and enforces the active-device limit. A successful response contains only licence/activation identifiers, an opaque activation token, entitled release/platform, and the paid-through timestamp. It contains no email or Stripe payment data.
 
 ### `POST /api/license/verify`
 
@@ -57,7 +57,7 @@ Uses `Authorization: Bearer <activation token>` with:
 { "activation_id": "act_..." }
 ```
 
-The server compares the token hash in constant time, verifies the activation and licence status, and updates `last_seen_at`. It returns `ACTIVE`, `INVALID`, or `REVOKED`.
+The server compares the token hash in constant time, verifies the activation and subscription entitlement, and updates `last_seen_at`. It returns `ACTIVE`, `EXPIRED`, `INVALID`, or `REVOKED`.
 
 ### `POST /api/license/deactivate`
 
@@ -70,6 +70,10 @@ Existing `purchases` rows are migrated in place with:
 - `payment_status` — defaults to `paid` because purchases are created only by a verified paid webhook
 - `licence_status` — `active` or `revoked`
 - `revoked_at`
+- `stripe_subscription_id`
+- `subscription_status`
+- `current_period_end`
+- `cancel_at_period_end`
 
 The new `activations` table stores:
 
@@ -94,7 +98,7 @@ The Rust `keyring` crate uses native OS facilities:
 Two entries under `com.nobspdf.desktop` are stored:
 
 - a randomly generated, application-scoped device UUID
-- the licence key, activation ID/token, release entitlement, platform, and local status
+- the licence key, activation ID/token, release entitlement, platform, paid-through timestamp, and local status
 
 The app never reads hardware serial numbers and does not fingerprint the machine. The server stores only a hash of the app-generated UUID.
 
@@ -104,7 +108,7 @@ On startup, the app checks the native credential store. A locally active credent
 
 - success keeps the activation active and updates `last_seen_at`
 - network failure leaves the installed application usable
-- an explicit server `REVOKED` response is stored locally and shows the activation screen with an explanation
+- an explicit server `REVOKED` or `EXPIRED` response is stored locally and shows the activation screen with an explanation
 
 PDF inspection, estimation, and optimisation commands also check for an active local credential, preventing a bypass of the React screen. They do not perform network requests and no optimisation code was changed.
 
@@ -113,8 +117,8 @@ it remains open. A network verification is attempted only when the last
 successful verification is approximately 30 days old (with deterministic
 per-activation jitter of up to 24 hours), or when a scheduled retry is due.
 Transient failures retry after approximately one day, then three days, then
-weekly. They never expire or downgrade a locally active one-time-purchase
-licence. Only the expected authenticated `401 INVALID` or `403 REVOKED`
+weekly. During a paid term they never downgrade a locally active subscription
+licence. Only the expected authenticated `401 INVALID`, `403 REVOKED`, or `403 EXPIRED`
 protocol response changes local activation state. It does not require an
 internet connection per PDF or per optimisation.
 

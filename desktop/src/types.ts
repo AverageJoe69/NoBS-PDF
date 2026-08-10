@@ -52,6 +52,7 @@ export type LicenceState =
   | "ACTIVE"
   | "INVALID"
   | "REVOKED"
+  | "EXPIRED"
   | "ACTIVATION_LIMIT_REACHED"
   | "NETWORK_ERROR";
 

@@ -588,7 +588,9 @@ export default function App() {
       void invoke<LicenceStatus>("revalidate_licence").then((remote) => {
         if (
           active &&
-          (remote.state === "REVOKED" ||
+          (remote.state === "ACTIVE" ||
+            remote.state === "REVOKED" ||
+            remote.state === "EXPIRED" ||
             (remote.state === "INVALID" && !remote.locallyActivated))
         ) {
           setLicence(remote);
@@ -598,7 +600,7 @@ export default function App() {
     void invoke<LicenceStatus>("get_licence_status").then((local) => {
       if (!active) return;
       setLicence(local);
-      if (local.state === "ACTIVE") {
+      if (local.state === "ACTIVE" || local.state === "EXPIRED") {
         checkIfDue();
       }
     });

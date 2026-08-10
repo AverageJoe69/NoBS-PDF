@@ -11,6 +11,7 @@ const DEVICE_ACCOUNT: &str = "device-identifier";
 const DEFAULT_API_URL: &str = "https://nobspdf.com";
 const DAY_SECONDS: i64 = 24 * 60 * 60;
 const NORMAL_VERIFICATION_SECONDS: i64 = 30 * DAY_SECONDS;
+const OFFLINE_GRACE_SECONDS: i64 = 30 * DAY_SECONDS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -19,6 +20,7 @@ pub enum LicenceState {
     Active,
     Invalid,
     Revoked,
+    Expired,
     ActivationLimitReached,
     NetworkError,
 }
@@ -47,6 +49,8 @@ struct StoredCredential {
     last_verification_attempt_at: Option<i64>,
     #[serde(default)]
     verification_failure_count: u32,
+    #[serde(default)]
+    paid_through: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -72,6 +76,7 @@ struct ApiResponse {
     activation_token: Option<String>,
     release_version: Option<String>,
     platform: Option<String>,
+    paid_through: Option<i64>,
 }
 
 fn credential_entry() -> Result<Entry, String> {
@@ -202,6 +207,13 @@ fn verification_due(credential: &StoredCredential, now: i64) -> bool {
         .unwrap_or(true)
 }
 
+fn usable_offline(credential: &StoredCredential, now: i64) -> bool {
+    credential.state == LicenceState::Active
+        && credential
+            .paid_through
+            .is_some_and(|paid_through| now <= paid_through.saturating_add(OFFLINE_GRACE_SECONDS))
+}
+
 pub fn normalize_licence_key(value: &str) -> Option<String> {
     let compact: String = value
         .chars()
@@ -223,14 +235,27 @@ pub fn normalize_licence_key(value: &str) -> Option<String> {
 
 pub fn local_status() -> LicenceStatus {
     match read_credential() {
-        Ok(Some(credential)) => LicenceStatus {
-            locally_activated: credential.state == LicenceState::Active,
-            message: (credential.state == LicenceState::Revoked)
-                .then(|| "This licence has been revoked. Please contact support.".into()),
-            state: credential.state,
-            licence_key: Some(credential.licence_key),
-            device_name: device_name(),
-        },
+        Ok(Some(credential)) => {
+            let usable = usable_offline(&credential, now_timestamp());
+            let state = if credential.state == LicenceState::Active && !usable {
+                LicenceState::Expired
+            } else {
+                credential.state.clone()
+            };
+            LicenceStatus {
+                locally_activated: usable,
+                message: match state {
+                    LicenceState::Revoked => {
+                        Some("This licence has been revoked. Please contact support.".into())
+                    }
+                    LicenceState::Expired => Some("Your last confirmed subscription period and offline grace have ended. Connect to the internet to verify your subscription.".into()),
+                    _ => None,
+                },
+                state,
+                licence_key: Some(credential.licence_key),
+                device_name: device_name(),
+            }
+        }
         Ok(None) => LicenceStatus {
             state: LicenceState::NotActivated,
             message: None,
@@ -250,10 +275,11 @@ pub fn local_status() -> LicenceStatus {
 
 pub fn require_active() -> Result<(), String> {
     match read_credential()? {
-        Some(StoredCredential {
-            state: LicenceState::Active,
-            ..
-        }) => Ok(()),
+        Some(credential) if usable_offline(&credential, now_timestamp()) => Ok(()),
+        Some(credential) if credential.state == LicenceState::Active => Err(
+            "Connect to the internet to verify your subscription before processing documents."
+                .into(),
+        ),
         _ => Err("NoBS PDF must be activated before processing documents.".into()),
     }
 }
@@ -310,7 +336,10 @@ pub async fn activate(value: String) -> LicenceStatus {
     if code == StatusCode::CREATED && body.valid && body.state == LicenceState::Active {
         let now = now_timestamp();
         let credential = active_credential_from_response(&licence_key, body, now);
-        if credential.activation_id.is_empty() || credential.activation_token.is_empty() {
+        if credential.activation_id.is_empty()
+            || credential.activation_token.is_empty()
+            || credential.paid_through.is_none_or(|value| value <= now)
+        {
             return status(
                 LicenceState::Invalid,
                 "The licensing service returned an incomplete activation.",
@@ -352,6 +381,7 @@ fn active_credential_from_response(
         last_verified_at: Some(now),
         last_verification_attempt_at: Some(now),
         verification_failure_count: 0,
+        paid_through: body.paid_through,
     }
 }
 
@@ -378,7 +408,7 @@ async fn revalidate_credential(
     base_url: &str,
 ) -> (StoredCredential, LicenceStatus, bool) {
     if !verification_due(&credential, now) {
-        let status = credential_status(&credential);
+        let status = credential_status_at(&credential, now);
         return (credential, status, false);
     }
 
@@ -398,7 +428,7 @@ async fn revalidate_credential(
     let Ok(response) = response else {
         credential.verification_failure_count =
             credential.verification_failure_count.saturating_add(1);
-        let status = network_status(&credential);
+        let status = network_status_at(&credential, now);
         return (credential, status, true);
     };
     let code = response.status();
@@ -406,9 +436,16 @@ async fn revalidate_credential(
 
     match (code, body) {
         (StatusCode::OK, Some(body)) if body.valid && body.state == LicenceState::Active => {
+            if body.paid_through.is_none_or(|value| value <= now) {
+                credential.verification_failure_count =
+                    credential.verification_failure_count.saturating_add(1);
+                let status = network_status_at(&credential, now);
+                return (credential, status, true);
+            }
+            credential.paid_through = body.paid_through;
             credential.last_verified_at = Some(now);
             credential.verification_failure_count = 0;
-            let status = credential_status(&credential);
+            let status = credential_status_at(&credential, now);
             (credential, status, true)
         }
         (StatusCode::UNAUTHORIZED, Some(body))
@@ -425,22 +462,34 @@ async fn revalidate_credential(
             let status = protocol_status(&credential, body.message);
             (credential, status, true)
         }
+        (StatusCode::FORBIDDEN, Some(body))
+            if !body.valid && body.state == LicenceState::Expired =>
+        {
+            credential.state = LicenceState::Expired;
+            let status = protocol_status(&credential, body.message);
+            (credential, status, true)
+        }
         _ => {
             credential.verification_failure_count =
                 credential.verification_failure_count.saturating_add(1);
-            let status = network_status(&credential);
+            let status = network_status_at(&credential, now);
             (credential, status, true)
         }
     }
 }
 
+#[cfg(test)]
 fn credential_status(credential: &StoredCredential) -> LicenceStatus {
+    credential_status_at(credential, now_timestamp())
+}
+
+fn credential_status_at(credential: &StoredCredential, now: i64) -> LicenceStatus {
     LicenceStatus {
         state: credential.state.clone(),
         message: None,
         licence_key: Some(credential.licence_key.clone()),
         device_name: device_name(),
-        locally_activated: credential.state == LicenceState::Active,
+        locally_activated: usable_offline(credential, now),
     }
 }
 
@@ -489,12 +538,28 @@ pub async fn deactivate() -> LicenceStatus {
 }
 
 fn network_status(credential: &StoredCredential) -> LicenceStatus {
+    network_status_at(credential, now_timestamp())
+}
+
+fn network_status_at(credential: &StoredCredential, now: i64) -> LicenceStatus {
+    let usable = usable_offline(credential, now);
     LicenceStatus {
-        state: LicenceState::NetworkError,
-        message: Some("NoBS PDF is offline. Your existing activation remains usable.".into()),
+        state: if usable {
+            LicenceState::NetworkError
+        } else {
+            LicenceState::Expired
+        },
+        message: Some(
+            if usable {
+                "NoBS PDF is offline. Your existing activation remains usable."
+            } else {
+                "Your offline grace period has ended. Connect to the internet to verify your subscription."
+            }
+            .into(),
+        ),
         licence_key: Some(credential.licence_key.clone()),
         device_name: device_name(),
-        locally_activated: credential.state == LicenceState::Active,
+        locally_activated: usable,
     }
 }
 
@@ -532,6 +597,7 @@ mod tests {
             last_verified_at: Some(now),
             last_verification_attempt_at: Some(now),
             verification_failure_count: 0,
+            paid_through: Some(now + 365 * DAY_SECONDS),
         }
     }
 
@@ -601,7 +667,7 @@ mod tests {
     #[test]
     fn network_failure_preserves_an_active_local_installation() {
         let credential = active_credential(1_000_000);
-        let result = network_status(&credential);
+        let result = network_status_at(&credential, 1_000_000);
         assert_eq!(result.state, LicenceState::NetworkError);
         assert!(result.locally_activated);
     }
@@ -619,6 +685,7 @@ mod tests {
                 activation_token: Some("token".into()),
                 release_version: Some("1.0.0".into()),
                 platform: Some("macos".into()),
+                paid_through: Some(now + 365 * DAY_SECONDS),
             },
             now,
         );
@@ -629,14 +696,34 @@ mod tests {
     }
 
     #[test]
-    fn legacy_active_credential_migrates_without_reactivation() {
+    fn legacy_perpetual_credential_requires_online_subscription_verification() {
         let legacy = r#"{"licence_key":"NOBS-AB12-CD34-EF56-7890","activation_id":"act_legacy","activation_token":"token","release_version":"1.0.0","platform":"macos","state":"ACTIVE"}"#;
         let credential: StoredCredential = serde_json::from_str(legacy).unwrap();
         assert_eq!(credential.state, LicenceState::Active);
         assert_eq!(credential.last_verified_at, None);
         assert_eq!(credential.last_verification_attempt_at, None);
         assert_eq!(credential.verification_failure_count, 0);
-        assert!(credential_status(&credential).locally_activated);
+        assert!(!credential_status(&credential).locally_activated);
+    }
+
+    #[test]
+    fn subscription_is_usable_before_paid_through_and_during_thirty_day_grace() {
+        let now = 1_700_000_000;
+        let mut credential = active_credential(now);
+        credential.paid_through = Some(now + DAY_SECONDS);
+        assert!(usable_offline(&credential, now));
+        assert!(usable_offline(&credential, now + 30 * DAY_SECONDS));
+    }
+
+    #[test]
+    fn subscription_requires_online_verification_after_offline_grace() {
+        let now = 1_700_000_000;
+        let mut credential = active_credential(now);
+        credential.paid_through = Some(now - 31 * DAY_SECONDS);
+        assert!(!usable_offline(&credential, now));
+        let status = network_status_at(&credential, now);
+        assert_eq!(status.state, LicenceState::Expired);
+        assert!(!status.locally_activated);
     }
 
     #[test]
@@ -662,7 +749,7 @@ mod tests {
     #[test]
     fn due_credential_attempts_once_and_active_response_updates_timestamp() {
         let now = 1_700_000_000;
-        let body = r#"{"valid":true,"state":"ACTIVE","activation_id":"act_test","release_version":"1.0.0","platform":"macos"}"#;
+        let body = r#"{"valid":true,"state":"ACTIVE","activation_id":"act_test","release_version":"1.0.0","platform":"macos","paid_through":2000000000}"#;
         let (url, requests) = server(200, "application/json", body, Duration::ZERO);
         let credential = active_credential(now - 32 * DAY_SECONDS);
         let (updated, status, attempted) =
@@ -670,6 +757,7 @@ mod tests {
         assert!(attempted);
         assert_eq!(requests.load(Ordering::SeqCst), 1);
         assert_eq!(updated.last_verified_at, Some(now));
+        assert_eq!(updated.paid_through, Some(2_000_000_000));
         assert_eq!(updated.verification_failure_count, 0);
         assert_eq!(status.state, LicenceState::Active);
     }
@@ -728,7 +816,7 @@ mod tests {
         let (url, _) = server(
             200,
             "application/json",
-            r#"{"valid":true,"state":"ACTIVE"}"#,
+            r#"{"valid":true,"state":"ACTIVE","paid_through":2000000000}"#,
             Duration::from_millis(200),
         );
         let credential = active_credential(now - 32 * DAY_SECONDS);
@@ -766,6 +854,11 @@ mod tests {
                 r#"{"valid":false,"state":"REVOKED","message":"Revoked."}"#,
                 LicenceState::Revoked,
             ),
+            (
+                403,
+                r#"{"valid":false,"state":"EXPIRED","message":"Expired."}"#,
+                LicenceState::Expired,
+            ),
         ];
         for (code, body, expected) in cases {
             let (url, _) = server(code, "application/json", body, Duration::ZERO);
@@ -794,7 +887,7 @@ mod tests {
         let (url, requests) = server(
             200,
             "application/json",
-            r#"{"valid":true,"state":"ACTIVE"}"#,
+            r#"{"valid":true,"state":"ACTIVE","paid_through":2000000000}"#,
             Duration::ZERO,
         );
         let (_, _, attempted) = run(
