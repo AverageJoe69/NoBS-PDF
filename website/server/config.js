@@ -23,10 +23,12 @@ export function loadConfig(env = process.env) {
   const releaseVersion = env.NOBS_RELEASE_VERSION || RELEASE_VERSION;
   const activationLimit = Number(env.LICENCE_ACTIVATION_LIMIT || 2);
   const port = Number(env.PORT || 4242);
+  const trustProxyHops = Number(env.TRUST_PROXY_HOPS || (production ? 1 : 0));
   if (!env.STRIPE_WEBHOOK_SECRET.startsWith("whsec_")) throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret.");
   if (!env.STRIPE_PRICE_ID.startsWith("price_")) throw new Error("STRIPE_PRICE_ID must be a Stripe Price ID.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port.");
   if (!Number.isInteger(activationLimit) || activationLimit < 1 || activationLimit > 20) throw new Error("LICENCE_ACTIVATION_LIMIT must be an integer between 1 and 20.");
+  if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 5) throw new Error("TRUST_PROXY_HOPS must be an integer between 0 and 5.");
   if (!/^\d+\.\d+\.\d+$/.test(releaseVersion)) throw new Error("NOBS_RELEASE_VERSION must be a semantic version such as 1.0.0.");
 
   if (production) {
@@ -58,6 +60,7 @@ export function loadConfig(env = process.env) {
     databasePath,
     releaseVersion,
     activationLimit,
+    trustProxyHops,
     downloads: {
       macOS: env.MACOS_DOWNLOAD_URL || "",
       Windows: env.WINDOWS_DOWNLOAD_URL || "",

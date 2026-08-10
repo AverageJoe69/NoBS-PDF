@@ -248,6 +248,92 @@ test("activation credential verifies without exposing payment data", async (t) =
   assert.equal(response.body.activation_token, undefined);
 });
 
+test("complete licence lifecycle activates, verifies, deactivates, and invalidates the credential", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const key = seedLicence(store, "lifecycle");
+  const activation = await request(app).post("/api/license/activate").send(activationBody(key));
+  assert.equal(activation.status, 201);
+  assert.deepEqual(Object.keys(activation.body).sort(), [
+    "activation_id", "activation_token", "license_id", "platform", "release_version", "state", "valid",
+  ]);
+
+  const authorization = `Bearer ${activation.body.activation_token}`;
+  const verified = await request(app).post("/api/license/verify").set("authorization", authorization)
+    .send({ activation_id: activation.body.activation_id });
+  assert.equal(verified.status, 200);
+  assert.deepEqual(verified.body, {
+    valid: true,
+    state: "ACTIVE",
+    activation_id: activation.body.activation_id,
+    release_version: "1.0.0",
+    platform: "macos",
+  });
+
+  const deactivated = await request(app).post("/api/license/deactivate").set("authorization", authorization)
+    .send({ activation_id: activation.body.activation_id });
+  assert.equal(deactivated.status, 200);
+  assert.deepEqual(deactivated.body, { state: "NOT_ACTIVATED", deactivated: true });
+
+  const after = await request(app).post("/api/license/verify").set("authorization", authorization)
+    .send({ activation_id: activation.body.activation_id });
+  assert.equal(after.status, 401);
+  assert.deepEqual(after.body, { valid: false, state: "INVALID", message: "This activation is not valid." });
+});
+
+test("missing and malformed licence requests fail without accepting client-controlled state", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const missing = await request(app).post("/api/license/activate").send({});
+  assert.equal(missing.status, 400);
+  assert.deepEqual(missing.body, { state: "INVALID", message: "The licence or device information is malformed." });
+
+  const injected = await request(app).post("/api/license/activate").send({
+    ...activationBody("NOBS-AB12-CD34-EF56-7890"), state: "ACTIVE", valid: true, activation_limit: 100,
+  });
+  assert.equal(injected.status, 404);
+  assert.deepEqual(injected.body, { state: "INVALID", message: "This licence key is not valid." });
+
+  const malformed = await request(app).post("/api/license/activate")
+    .set("content-type", "application/json").send('{"license_key":');
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(malformed.body, { error: "The request body is malformed." });
+  assert.equal(malformed.text.includes("stack"), false);
+});
+
+test("database failures return safe JSON and health reports unavailable", async () => {
+  const failingStore = {
+    activateLicence() { throw new Error("sqlite path and internal details must not escape"); },
+    healthCheck() { throw new Error("database unavailable"); },
+  };
+  const stripe = { webhooks: stripeSdk.webhooks };
+  const app = createApp({ stripe, store: failingStore, config });
+
+  const response = await request(app).post("/api/license/activate")
+    .send(activationBody("NOBS-AB12-CD34-EF56-7890"));
+  assert.equal(response.status, 500);
+  assert.deepEqual(response.body, { error: "The request could not be completed." });
+  assert.equal(response.text.includes("sqlite"), false);
+  assert.equal(response.text.includes("stack"), false);
+
+  const health = await request(app).get("/healthz");
+  assert.equal(health.status, 503);
+  assert.deepEqual(health.body, { status: "unavailable" });
+});
+
+test("health check returns JSON when the database is available", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const response = await request(app).get("/healthz");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { status: "ok" });
+});
+
+test("unknown API routes return JSON rather than the website fallback", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const response = await request(app).get("/api/license/activate");
+  assert.equal(response.status, 404);
+  assert.match(response.headers["content-type"], /^application\/json/);
+  assert.deepEqual(response.body, { error: "API endpoint not found." });
+});
+
 test("browser and desktop source contain no server secrets", () => {
   const sources = ["src/App.tsx", "src/config.ts", "../desktop/src/App.tsx", "../desktop/src-tauri/src/licensing.rs"]
     .map(file => fs.readFileSync(new URL(file, import.meta.url.replace("test/payment-flow.test.js", "")), "utf8")).join("\n");

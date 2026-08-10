@@ -136,6 +136,7 @@ export function createStore(filename) {
   }
 
   return {
+    healthCheck() { db.prepare("SELECT 1").get(); },
     recordPurchase: record,
     findPurchaseBySession(sessionId) { return findBySession.get(sessionId) ?? null; },
     findDownloadEntitlement(sessionId, releaseVersion) {

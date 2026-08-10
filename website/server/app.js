@@ -41,6 +41,7 @@ function publicPurchase(row) {
 export function createApp({ stripe, store, config, logger = noOpLogger }) {
   const app = express();
   app.disable("x-powered-by");
+  if (config.trustProxyHops) app.set("trust proxy", config.trustProxyHops);
   app.use((_req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",
@@ -103,6 +104,15 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
   });
 
   app.use(express.json({ limit: "32kb" }));
+
+  app.get("/healthz", (_req, res) => {
+    try {
+      store.healthCheck();
+      return res.json({ status: "ok" });
+    } catch {
+      return res.status(503).json({ status: "unavailable" });
+    }
+  });
 
   app.post("/api/license/activate", activationRateLimit(), (req, res) => {
     const licenceKey = normalizeLicenceKey(req.body?.license_key);
@@ -211,6 +221,8 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
     logger.info("download.authorized", { session: safeReference(sessionId), release: config.releaseVersion, platform });
     return res.redirect(303, target);
   });
+
+  app.use("/api", (_req, res) => res.status(404).json({ error: "API endpoint not found." }));
 
   app.use(express.static("dist", { index: false, maxAge: "1h" }));
   app.get("*splat", (_req, res) => res.sendFile("index.html", { root: "dist" }));
