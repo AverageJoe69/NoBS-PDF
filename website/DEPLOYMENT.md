@@ -65,7 +65,8 @@ launch. The server creates and migrates its schema on startup.
 
 ## Stripe production setup
 
-1. Create or select the live GBP 25/year, inclusive-tax recurring NoBS PDF Price and set its `price_...`
+1. Create or select the live NoBS PDF Product, set its tax code to
+   `txcd_10202001`, then create a GBP 25/year, inclusive-tax recurring Price and set its `price_...`
    value as `STRIPE_PRICE_ID`.
 2. Create a live webhook endpoint at `https://nobspdf.com/webhook`.
 3. Subscribe to the event set documented in `SUBSCRIPTION_LICENSING.md`.

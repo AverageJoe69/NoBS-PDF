@@ -62,9 +62,15 @@ function harness(session = paidSession()) {
     prices: { retrieve: async () => ({ id: "price_nobs_test", active: true, currency: "gbp", unit_amount: 2500, type: "recurring", recurring: { interval: "year", interval_count: 1 }, tax_behavior: "inclusive", product: { name: "NoBS PDF" } }) },
     checkout: { sessions: {
       create: async (params) => { calls.push(params); return { id: "cs_test_created123", url: "https://checkout.stripe.test/session" }; },
-      retrieve: async () => session,
+      retrieve: async (_id, options) => {
+        assert.deepEqual(options?.expand, ["subscription"]);
+        return session;
+      },
     } },
-    subscriptions: { retrieve: async (id) => typeof session.subscription === "object" ? session.subscription : ({ ...paidSession().subscription, id }) },
+    subscriptions: { retrieve: async (id, options) => {
+      assert.deepEqual(options?.expand, ["items.data.price.product"]);
+      return typeof session.subscription === "object" ? session.subscription : ({ ...paidSession().subscription, id });
+    } },
     invoices: { retrieve: async () => ({ subscription: typeof session.subscription === "object" ? session.subscription.id : session.subscription }) },
     billingPortal: { sessions: { create: async (params) => { calls.push({ portal: params }); return { url: "https://billing.stripe.test/session" }; } } },
   };
@@ -189,6 +195,7 @@ test("annual renewal extends paid-through; failed renewal does not; recovery doe
   assert.ok(Date.parse(renewed) > Date.parse(initial));
 
   session.subscription.current_period_end -= 100;
+  session.subscription.status = "past_due";
   await deliver(app, signedWebhook("invoice.payment_failed", { id: "in_failed", subscription: session.subscription.id }, "evt_failed"));
   const failed = store.findPurchaseBySession(session.id);
   assert.equal(failed.subscription_status, "past_due");
@@ -225,6 +232,20 @@ test("cancellation at period end stays active until paid-through, then expires",
   const expired = await request(app).post("/api/license/verify").set("authorization", `Bearer ${activation.body.activation_token}`).send({ activation_id: activation.body.activation_id });
   assert.equal(expired.status, 403);
   assert.equal(expired.body.state, "EXPIRED");
+});
+
+test("stale subscription event snapshot cannot overwrite current Stripe state", async (t) => {
+  const session = paidSession();
+  const { app, store } = harness(session); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_order_initial"));
+  const currentPeriodEnd = session.subscription.current_period_end;
+  const stale = { ...session.subscription, status: "past_due", current_period_end: currentPeriodEnd - 86400, cancel_at_period_end: true };
+  const response = await deliver(app, signedWebhook("customer.subscription.updated", stale, "evt_stale_update"));
+  assert.equal(response.status, 200);
+  const purchase = store.findPurchaseBySession(session.id);
+  assert.equal(purchase.subscription_status, "active");
+  assert.equal(purchase.cancel_at_period_end, 0);
+  assert.equal(purchase.current_period_end, new Date(currentPeriodEnd * 1000).toISOString());
 });
 
 test("refunded subscription is explicitly revoked and duplicate lifecycle event is idempotent", async (t) => {

@@ -99,9 +99,11 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
 
     try {
       if (event.type.startsWith("checkout.session.")) {
-        const session = await stripe.checkout.sessions.retrieve(event.data.object.id, { expand: ["subscription.items.data.price.product"] });
+        const session = await stripe.checkout.sessions.retrieve(event.data.object.id, { expand: ["subscription"] });
         if (session.mode !== "subscription" || session.payment_status !== "paid") return res.json({ received: true, fulfilled: false });
-        const subscription = typeof session.subscription === "object" ? session.subscription : await stripe.subscriptions.retrieve(session.subscription, { expand: ["items.data.price.product"] });
+        const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+        if (!subscriptionId) return res.json({ received: true, fulfilled: false });
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price.product"] });
         if (subscription.status !== "active") return res.json({ received: true, fulfilled: false });
         const { priceId, productId } = subscriptionPrice(subscription);
         const paidThrough = subscriptionPeriodEnd(subscription);
@@ -123,8 +125,7 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
 
       let subscription;
       if (event.type.startsWith("customer.subscription.")) {
-        subscription = event.data.object;
-        if (!subscription.items?.data?.[0]?.price) subscription = await stripe.subscriptions.retrieve(subscription.id, { expand: ["items.data.price.product"] });
+        subscription = await stripe.subscriptions.retrieve(event.data.object.id, { expand: ["items.data.price.product"] });
       } else {
         const object = event.data.object;
         let subscriptionId = typeof object.subscription === "string" ? object.subscription : object.subscription?.id;
@@ -137,16 +138,14 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
       }
       const { priceId } = subscriptionPrice(subscription);
       if (priceId !== config.stripePriceId) return res.status(400).json({ error: "Subscription does not contain the configured NoBS PDF Price." });
-      const paidEvent = event.type === "invoice.paid";
-      const failedEvent = event.type === "invoice.payment_failed";
       const refunded = event.type === "charge.refunded" && event.data.object.refunded;
       const nonPayingStatus = ["incomplete", "incomplete_expired", "past_due", "unpaid"].includes(subscription.status);
       const result = store.updateSubscription(event, {
         subscriptionId: subscription.id,
-        subscriptionStatus: refunded ? "revoked" : failedEvent ? "past_due" : subscription.status,
+        subscriptionStatus: refunded ? "revoked" : subscription.status,
         currentPeriodEnd: subscriptionPeriodEnd(subscription),
         cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-        paymentStatus: refunded ? "refunded" : (failedEvent || nonPayingStatus) ? "failed" : paidEvent ? "paid" : "paid",
+        paymentStatus: refunded ? "refunded" : nonPayingStatus ? "failed" : "paid",
       });
       logger.info(result.duplicate ? "webhook.duplicate" : "subscription.updated", { stripeEvent: safeReference(event.id), subscription: safeReference(subscription.id) });
       return res.json({ received: true, duplicate: result.duplicate, updated: result.updated });

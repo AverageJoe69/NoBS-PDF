@@ -73,6 +73,8 @@ Checkout Session and returns only Stripe's short-lived Portal URL.
 ## Production Stripe checklist
 
 1. Create one live NoBS PDF Product.
+   Set `tax_code=txcd_10202001` (downloadable non-recreational software); test
+   Product settings do not carry into live mode.
 2. Create one recurring Price: GBP 25.00, yearly, tax behaviour inclusive. Do
    not create a monthly Price for this product.
 3. Enable Stripe Tax/automatic tax and complete the relevant registrations and
