@@ -151,8 +151,19 @@ Run on macOS after the production API and Apple credentials exist:
 ```bash
 cd "/Users/joeconway/NoBS PDF/desktop"
 npm ci
-NOBS_LICENSE_API_URL=https://YOUR_PRODUCTION_DOMAIN npm run tauri:build -- --bundles app,dmg
+export NOBS_LICENSE_API_URL=https://nobspdf.com
+export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR LEGAL NAME (TEAMID)'
+# Also export either the APPLE_API_* or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID
+# notarisation credential set described above.
+npm run tauri:build:macos:release
 ```
+
+The release wrapper fails before building if it cannot find a real signing
+identity, if ad-hoc signing is requested, if notarisation credentials are
+absent, or if the Apple Silicon PDFium library is missing. The repository's
+authoritative production origin is currently `https://nobspdf.com`; its
+licensing routes must be deployed and verified before this command is used for
+an RC.
 
 Verify:
 
@@ -160,6 +171,7 @@ Verify:
 codesign --verify --deep --strict --verbose=2 "src-tauri/target/release/bundle/macos/NoBS PDF.app"
 spctl --assess --type execute --verbose=4 "src-tauri/target/release/bundle/macos/NoBS PDF.app"
 xcrun stapler validate "src-tauri/target/release/bundle/dmg/NoBS PDF_1.0.0_*.dmg"
+xcrun stapler validate "src-tauri/target/release/bundle/macos/NoBS PDF.app"
 ```
 
 Do not distribute an ad-hoc-signed artifact. Tauri enables hardened runtime in `tauri.macos.conf.json`; actual signing and notarisation remain credential-dependent.
