@@ -1,6 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { content, siteConfig } from "./config";
 
+type Releases = { macOS: boolean; Windows: boolean };
+const windowsOnly: Releases = { macOS: false, Windows: true };
+
+function platformSummary(releases: Releases) {
+  const available = [releases.Windows && "Windows", releases.macOS && "macOS"].filter(Boolean);
+  return available.length ? available.join(" + ") : "desktop";
+}
+
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <a className={`logo ${compact ? "logoCompact" : ""}`} href="/" aria-label="NoBS PDF home">
@@ -51,7 +59,7 @@ function SectionIntro({ kicker, title, children }: { kicker: string; title: stri
   return <div className="sectionIntro"><p className="kicker">{kicker}</p><h2>{title}</h2>{children}</div>;
 }
 
-function Hero() {
+function Hero({ releases }: { releases: Releases }) {
   return (
     <section className="hero shell">
       <div className="heroCopy">
@@ -59,7 +67,7 @@ function Hero() {
         <h1>Smaller PDFs.<br /><span>Without the bullshit.</span></h1>
         <p className="lede">Intelligent PDF optimisation that actually understands what’s inside your document.</p>
         <div className="heroActions"><BuyButton /><a className="button buttonText" href="#how">See how it works <span>↓</span></a></div>
-        <p className="platforms">Made for {siteConfig.platforms.join(" + ")} · Processes locally</p>
+        <p className="platforms">Available for {platformSummary(releases)} · macOS coming soon · Processes locally</p>
       </div>
       <div className="heroObject" aria-label="NoBS PDF application icon">
         <div className="iconField"><img src="/brand/nobs-app-icon.svg" alt="NoBS PDF" /></div>
@@ -137,10 +145,10 @@ function LocalProcessing() {
   );
 }
 
-function AppPreview() {
+function AppPreview({ releases }: { releases: Releases }) {
   return (
     <section className="appSection section shell">
-      <SectionIntro kicker="The desktop app" title="A proper utility. Not another upload form."><p>A focused native desktop app for macOS and Windows.</p></SectionIntro>
+      <SectionIntro kicker="The desktop app" title="A proper utility. Not another upload form."><p>A focused native desktop app for {platformSummary(releases)}. macOS coming soon.</p></SectionIntro>
       <div className="appWindow">
         <div className="titlebar"><span><i /><i /><i /></span><b>NoBS PDF</b></div>
         <div className="appBody"><Logo compact /><div className="appPanel">
@@ -156,7 +164,7 @@ function AppPreview() {
   );
 }
 
-function Pricing() {
+function Pricing({ releases }: { releases: Releases }) {
   const [price, setPrice] = useState("Loading…");
   const checkoutCancelled = new URLSearchParams(window.location.search).get("checkout") === "cancelled";
   useEffect(() => {
@@ -170,24 +178,24 @@ function Pricing() {
   return (
     <section className="pricing section" id="pricing"><div className="shell pricingGrid">
       <SectionIntro kicker="Simple pricing" title="One useful tool. One annual price."><p>£25 a year, tax included. No monthly plan, credits, tiers or pricing maze.</p></SectionIntro>
-      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}<small> / year</small></strong><p>Annual subscription. Cancel whenever you like.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>macOS and Windows · up to 2 devices</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton /></div>
+      <div className="priceCard"><img src="/brand/nobs-icon-green.svg" alt="" /><span>NoBS PDF for desktop</span><strong>{price}<small> / year</small></strong><p>Annual subscription. Cancel whenever you like.</p>{checkoutCancelled && <div className="checkoutNotice">Checkout was cancelled. You haven’t been charged.</div>}<ul><li>{platformSummary(releases)} · up to 2 devices</li><li>macOS coming soon</li><li>Local PDF processing</li><li>Intelligent raster optimisation</li><li>Selectable-text preservation option</li></ul><BuyButton /></div>
     </div></section>
   );
 }
 
-const faqs = [
+const baseFaqs = [
   ["What does NoBS actually do?", "It analyses raster objects inside a PDF and optimises them according to how they are placed and used, while preserving document structure wherever supported."],
   ["Does it change image quality?", "It intentionally changes raster resolution and encoding where appropriate. The goal is excellent visual quality at a dramatically smaller size—not lossless compression."],
   ["Does it preserve selectable text?", "Yes, selectable text can be kept separate when the preservation option is enabled."],
   ["Does it change image aspect ratios?", "NoBS preserves image aspect ratios during optimisation."],
   ["Does my PDF leave my computer?", "NoBS processes PDFs locally. Your document does not need to be uploaded to a server for optimisation."],
   ["Is this a subscription?", "Yes. NoBS PDF is £25 per year, including applicable tax. You can cancel through Stripe and keep using it until the end of your paid term."],
-  ["Does it work on Windows?", "Yes. NoBS PDF is intended for macOS and Windows."],
   ["Can I use it on multiple computers?", siteConfig.multiComputerPolicy],
 ] as const;
 
-function FAQ() {
+function FAQ({ releases }: { releases: Releases }) {
   const [open, setOpen] = useState<number | null>(0);
+  const faqs = [...baseFaqs, ["Which platforms are available?", `NoBS PDF is available for ${platformSummary(releases)}. The macOS release is coming soon.`] as const];
   return <section className="faq section shell"><SectionIntro kicker="Questions, answered" title="Frequently asked. Plainly answered." /><div className="faqList">{faqs.map(([q, a], i) => <div className="faqItem" key={q}><button aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}><span>{q}</span><i>{open === i ? "−" : "+"}</i></button>{open === i && <p>{a}</p>}</div>)}</div></section>;
 }
 
@@ -202,7 +210,7 @@ function Footer() {
 function DownloadPage() {
   const sessionId = new URLSearchParams(window.location.search).get("session_id") ?? "";
   const [state, setState] = useState<"loading" | "complete" | "error">("loading");
-  const [purchase, setPurchase] = useState<{ email: string; licenceKey: string; releaseVersion: string } | null>(null);
+  const [purchase, setPurchase] = useState<{ email: string; licenceKey: string; releaseVersion: string; downloads: Releases } | null>(null);
   const [message, setMessage] = useState("Confirming your payment…");
   const [portalError, setPortalError] = useState("");
   async function manageBilling() {
@@ -233,10 +241,22 @@ function DownloadPage() {
   }, [sessionId]);
 
   if (state !== "complete" || !purchase) return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">{state === "loading" ? "…" : "!"}</span><p className="kicker">PAYMENT CONFIRMATION</p><h1>{state === "loading" ? "Just a moment." : "We can’t show the download yet."}</h1><p>{message}</p><a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
-  return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">✓</span><p className="kicker">SUBSCRIPTION ACTIVE</p><h1>You’re in.</h1><p>NoBS PDF is ready for <strong>{purchase.email}</strong>.</p><div className="licence"><small>YOUR LICENCE KEY</small><code>{purchase.licenceKey}</code></div><div><a className="button buttonPrimary" href={`/api/download/mac?session_id=${encodeURIComponent(sessionId)}`}>Download for Mac</a><a className="button buttonPrimary" href={`/api/download/windows?session_id=${encodeURIComponent(sessionId)}`}>Download for Windows</a></div><small>Your annual subscription covers release {purchase.releaseVersion} on up to two devices.</small><button className="backHome" onClick={() => void manageBilling()}>Manage subscription ↗</button>{portalError && <small role="alert">{portalError}</small>}<a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
+  return <main className="download"><Logo /><div className="downloadCard"><span className="successMark">✓</span><p className="kicker">SUBSCRIPTION ACTIVE</p><h1>You’re in.</h1><p>NoBS PDF is ready for <strong>{purchase.email}</strong>.</p><div className="licence"><small>YOUR LICENCE KEY</small><code>{purchase.licenceKey}</code></div><div>{purchase.downloads.Windows && <a className="button buttonPrimary" href={`/api/download/windows?session_id=${encodeURIComponent(sessionId)}`}>Download for Windows</a>}{purchase.downloads.macOS ? <a className="button buttonPrimary" href={`/api/download/mac?session_id=${encodeURIComponent(sessionId)}`}>Download for Mac</a> : <span className="button buttonText" aria-disabled="true">Mac — Coming soon</span>}</div><small>Your annual subscription covers release {purchase.releaseVersion} on up to two devices.</small><button className="backHome" onClick={() => void manageBilling()}>Manage subscription ↗</button>{portalError && <small role="alert">{portalError}</small>}<a className="backHome" href="/">← Back to NoBS PDF</a></div></main>;
+}
+
+function Home() {
+  const [releases, setReleases] = useState<Releases>(windowsOnly);
+  useEffect(() => {
+    void fetch("/api/config").then(async (response) => {
+      if (!response.ok) return;
+      const data = await response.json();
+      if (typeof data.releases?.macOS === "boolean" && typeof data.releases?.Windows === "boolean") setReleases(data.releases);
+    }).catch(() => undefined);
+  }, []);
+  return <><Header /><main><Hero releases={releases} /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview releases={releases} /><Pricing releases={releases} /><FAQ releases={releases} /><FinalCTA /></main><Footer /></>;
 }
 
 export default function App() {
   if (window.location.pathname === "/download" || window.location.pathname === "/success") return <DownloadPage />;
-  return <><Header /><main><Hero /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview /><Pricing /><FAQ /><FinalCTA /></main><Footer /></>;
+  return <Home />;
 }

@@ -7,6 +7,15 @@ use lopdf::{
 };
 use tempfile::TempDir;
 
+fn pdfium_library() -> std::path::PathBuf {
+    let relative = if cfg!(target_os = "windows") {
+        "vendor/pdfium/bin/pdfium.dll"
+    } else {
+        "vendor/pdfium/lib/libpdfium.dylib"
+    };
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
+}
+
 fn fixture(path: &Path) {
     let mut doc = Document::with_version("1.7");
     // Deliberately unreachable legacy payload: flattening must prune obsolete
@@ -81,7 +90,7 @@ fn dry_run_writes_nothing() {
 
 #[test]
 fn full_page_export_flattens_content_and_validates() {
-    let library = Path::new(env!("CARGO_MANIFEST_DIR")).join("vendor/pdfium/lib/libpdfium.dylib");
+    let library = pdfium_library();
     if !library.exists() {
         return;
     }
@@ -103,7 +112,7 @@ fn full_page_export_flattens_content_and_validates() {
 
 #[test]
 fn graphics_flatten_preserves_selectable_text() {
-    let library = Path::new(env!("CARGO_MANIFEST_DIR")).join("vendor/pdfium/lib/libpdfium.dylib");
+    let library = pdfium_library();
     if !library.exists() {
         return;
     }
@@ -150,7 +159,7 @@ fn graphics_flatten_preserves_selectable_text() {
 
 #[test]
 fn test_validation_failure_blocks_output() {
-    let library = Path::new(env!("CARGO_MANIFEST_DIR")).join("vendor/pdfium/lib/libpdfium.dylib");
+    let library = pdfium_library();
     if !library.exists() {
         return;
     }

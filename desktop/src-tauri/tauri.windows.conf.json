@@ -1,10 +1,14 @@
 {
   "bundle": {
+    "targets": ["nsis"],
     "resources": {
       "../../vendor/pdfium/bin/pdfium.dll": "pdfium.dll"
     },
     "windows": {
-      "digestAlgorithm": "sha256"
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   }
 }

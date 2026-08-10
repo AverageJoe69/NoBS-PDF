@@ -72,7 +72,7 @@ No superficial advisory suppression or pre-parse check has been added. Until the
 ## Production blockers, in priority order
 
 1. **Rust dependency audit still fails on the frozen engine.** The `time` and `quick-xml` advisories are resolved, but `lopdf 0.36.0` remains affected by high-severity `RUSTSEC-2026-0187` (deeply nested PDF object stack overflow; fixed in 0.42.0). It is reachable through local PDF processing and cannot be upgraded safely without a separate engine compatibility branch and full malformed-input and golden regression review.
-2. **Windows PDFium binary is missing.** Supply the matching production `pdfium.dll` at `vendor/pdfium/bin/pdfium.dll` and validate it against the pinned PDFium version before a Windows build can work.
+2. **Windows PDFium is prepared but not yet exercised in a native build.** The manual Windows RC workflow downloads revision 7350, verifies the pinned archive and DLL SHA-256 values, and bundles it as `pdfium.dll`.
 3. **Stripe live configuration is missing.** Live secret, live one-time Price ID, and production webhook signing secret are required.
 4. **No deployed HTTPS API or durable production database is configured.** The service must run as one application instance with a persistent volume and backups.
 5. **No production download artifacts or HTTPS destinations are configured.** Both URLs must be namespaced under `/1.0.0/`.
@@ -178,7 +178,7 @@ Do not distribute an ad-hoc-signed artifact. Tauri enables hardened runtime in `
 
 ### Windows release
 
-Run on Windows after placing the matching DLL at `vendor/pdfium/bin/pdfium.dll` and adding real certificate configuration to `tauri.windows.conf.json`:
+Run on Windows after placing the matching revision-7350 DLL at `vendor/pdfium/bin/pdfium.dll`, or use the checksum-verifying Windows RC workflow. Production output must be signed through the configured Artifact Signing pipeline or an equivalent trusted certificate:
 
 ```powershell
 cd "C:\path\to\NoBS PDF\desktop"

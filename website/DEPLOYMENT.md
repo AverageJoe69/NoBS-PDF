@@ -45,12 +45,16 @@ DATABASE_PATH=/var/lib/nobspdf/nobs-production.sqlite
 NOBS_RELEASE_VERSION=1.0.0
 LICENCE_ACTIVATION_LIMIT=2
 TRUST_PROXY_MODE=cloudflare-railway           # constrained Railway + Cloudflare proxy trust
-MACOS_DOWNLOAD_URL=https://downloads.nobs-pdf.com/1.0.0/ACTUAL_MACOS_FILENAME.dmg
+MACOS_RELEASE_ENABLED=false
+WINDOWS_RELEASE_ENABLED=true
+MACOS_DOWNLOAD_URL=
 WINDOWS_DOWNLOAD_URL=https://downloads.nobs-pdf.com/1.0.0/ACTUAL_WINDOWS_FILENAME.exe
 ```
 
 Production startup fails closed for test Stripe keys, non-HTTPS origins,
-temporary/relative databases, the wrong release, or unversioned download URLs.
+temporary/relative databases, the wrong release, no enabled platform, or a
+missing/unversioned download URL for an enabled platform. Disabled platforms
+do not require a URL and cannot expose a download entitlement or redirect.
 
 ## Database operations
 

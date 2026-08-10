@@ -716,7 +716,12 @@ fn reject_paths(input: &Path, output: &Path, dry: bool) -> Result<(), FlattenErr
     Ok(())
 }
 fn default_pdfium_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("vendor/pdfium/lib/libpdfium.dylib")
+    let relative = if cfg!(target_os = "windows") {
+        "vendor/pdfium/bin/pdfium.dll"
+    } else {
+        "vendor/pdfium/lib/libpdfium.dylib"
+    };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative)
 }
 fn file_hash(path: &Path) -> Result<String, std::io::Error> {
     Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))

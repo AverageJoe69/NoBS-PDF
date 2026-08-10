@@ -77,13 +77,13 @@ function bearerToken(req) {
   return value.startsWith("Bearer ") ? value.slice(7) : "";
 }
 
-function publicPurchase(row) {
+function publicPurchase(row, releases) {
   return {
     email: row.customer_email,
     licenceKey: row.licence_key,
     releaseVersion: row.release_version,
     purchasedAt: row.purchase_timestamp,
-    downloads: { macOS: true, Windows: true },
+    downloads: { macOS: releases.macOS, Windows: releases.Windows },
   };
 }
 
@@ -252,6 +252,7 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
         productName: product && !product.deleted ? product.name : "NoBS PDF",
         currency: price.currency,
         unitAmount: price.unit_amount,
+        releases: config.releases,
       });
     } catch {
       res.status(503).json({ error: "Pricing is temporarily unavailable." });
@@ -300,7 +301,7 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
     res.set("Cache-Control", "no-store");
     if (!purchase) return res.status(202).json({ status: "pending" });
     if (!store.findDownloadEntitlement(req.params.sessionId, config.releaseVersion)) return res.status(403).json({ error: "This subscription is not currently entitled to access." });
-    return res.json({ status: "complete", purchase: publicPurchase(purchase) });
+    return res.json({ status: "complete", purchase: publicPurchase(purchase, config.releases) });
   });
 
   app.get("/api/download/:platform", (req, res) => {
@@ -309,6 +310,10 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
     if (!platforms.has(platform) || !SESSION_ID.test(sessionId)) {
       logger.warn("download.denied", { reason: "malformed", platform: req.params.platform });
       return res.status(400).json({ error: "Invalid download request." });
+    }
+    if (!config.releases[platform]) {
+      logger.warn("download.denied", { reason: "platform_unreleased", platform });
+      return res.status(404).json({ error: `${platform} is not currently released.` });
     }
     if (!store.findDownloadEntitlement(sessionId, config.releaseVersion)) {
       logger.warn("download.denied", { reason: "not_entitled", session: safeReference(sessionId), platform });

@@ -24,6 +24,16 @@ export function loadConfig(env = process.env) {
   const activationLimit = Number(env.LICENCE_ACTIVATION_LIMIT || 2);
   const port = Number(env.PORT || 4242);
   const trustProxyMode = env.TRUST_PROXY_MODE || (production ? "cloudflare-railway" : "none");
+  const releaseFlag = (name) => {
+    const value = env[name]?.trim().toLowerCase();
+    if (value === "true") return true;
+    if (value === "false" || (!production && value === undefined)) return false;
+    throw new Error(`${name} must be explicitly set to true or false.`);
+  };
+  const releases = {
+    macOS: releaseFlag("MACOS_RELEASE_ENABLED"),
+    Windows: releaseFlag("WINDOWS_RELEASE_ENABLED"),
+  };
   if (!env.STRIPE_WEBHOOK_SECRET.startsWith("whsec_")) throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret.");
   if (!env.STRIPE_PRICE_ID.startsWith("price_")) throw new Error("STRIPE_PRICE_ID must be a Stripe Price ID.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port.");
@@ -37,7 +47,9 @@ export function loadConfig(env = process.env) {
     if (appBaseUrl.protocol !== "https:" || ["localhost", "127.0.0.1"].includes(appBaseUrl.hostname) || appBaseUrl.hostname.endsWith(".test")) failures.push("APP_BASE_URL must be a production HTTPS origin");
     if (!env.DATABASE_PATH || !path.isAbsolute(env.DATABASE_PATH) || databasePath.startsWith("/tmp/")) failures.push("DATABASE_PATH must be an explicit absolute persistent path outside /tmp");
     if (releaseVersion !== RELEASE_VERSION) failures.push(`NOBS_RELEASE_VERSION must be ${RELEASE_VERSION}`);
-    for (const [name, value] of [["MACOS_DOWNLOAD_URL", env.MACOS_DOWNLOAD_URL], ["WINDOWS_DOWNLOAD_URL", env.WINDOWS_DOWNLOAD_URL]]) {
+    if (!releases.macOS && !releases.Windows) failures.push("at least one platform release must be enabled");
+    for (const [platform, name, value] of [["macOS", "MACOS_DOWNLOAD_URL", env.MACOS_DOWNLOAD_URL], ["Windows", "WINDOWS_DOWNLOAD_URL", env.WINDOWS_DOWNLOAD_URL]]) {
+      if (!releases[platform]) continue;
       try {
         const url = new URL(value);
         if (url.protocol !== "https:" || ["localhost", "127.0.0.1"].includes(url.hostname) || !url.pathname.includes(`/${releaseVersion}/`)) throw new Error();
@@ -61,9 +73,10 @@ export function loadConfig(env = process.env) {
     releaseVersion,
     activationLimit,
     trustProxyMode,
+    releases,
     downloads: {
-      macOS: env.MACOS_DOWNLOAD_URL || "",
-      Windows: env.WINDOWS_DOWNLOAD_URL || "",
+      macOS: releases.macOS ? env.MACOS_DOWNLOAD_URL || "" : "",
+      Windows: releases.Windows ? env.WINDOWS_DOWNLOAD_URL || "" : "",
     },
   };
 }

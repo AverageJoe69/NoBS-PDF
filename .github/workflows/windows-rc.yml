@@ -1,0 +1,134 @@
+name: Windows RC build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-sign-verify:
+    runs-on: windows-2025
+    environment: windows-rc
+    env:
+      NOBS_LICENSE_API_URL: https://nobs-pdf.com
+      PDFIUM_ARCHIVE_SHA256: 0289ee5f6beaa001c1fa0fc96dfdbc2f0238cd4b1cfc72a75ac473fa191dfbe6
+      PDFIUM_DLL_SHA256: 8f9600aeeb4f0ed4d5ab55ba772903c04175b05f13137f2712efe886d8c5b60b
+      WINDOWS_TARGET: x86_64-pc-windows-msvc
+
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            website/package-lock.json
+            desktop/package-lock.json
+
+      - name: Set up Rust MSVC target
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add $env:WINDOWS_TARGET
+
+      - name: Install and verify pinned PDFium
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "pdfium-win-x64.tgz"
+          Invoke-WebRequest "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7350/pdfium-win-x64.tgz" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PDFIUM_ARCHIVE_SHA256) { throw "PDFium archive checksum mismatch" }
+          $extract = Join-Path $env:RUNNER_TEMP "pdfium-7350"
+          New-Item -ItemType Directory -Force $extract | Out-Null
+          tar -xzf $archive -C $extract
+          $dll = Join-Path $extract "bin\pdfium.dll"
+          if ((Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:PDFIUM_DLL_SHA256) { throw "PDFium DLL checksum mismatch" }
+          New-Item -ItemType Directory -Force "vendor\pdfium\bin" | Out-Null
+          Copy-Item $dll "vendor\pdfium\bin\pdfium.dll"
+
+      - name: Test PDF core
+        shell: pwsh
+        run: cargo test --release
+
+      - name: Test website and licensing backend
+        working-directory: website
+        shell: pwsh
+        run: |
+          npm ci
+          npm test
+          npm audit
+          npm run build
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        shell: pwsh
+        run: npm ci
+
+      - name: Build application executable without installer
+        working-directory: desktop
+        shell: pwsh
+        run: npm run tauri -- build --no-bundle --config src-tauri/tauri.windows.conf.json --target $env:WINDOWS_TARGET
+
+      - name: Authenticate to Azure with GitHub OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign application executable
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          files: ${{ github.workspace }}\desktop\src-tauri\target\x86_64-pc-windows-msvc\release\nobs-pdf-desktop.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify application signature
+        shell: pwsh
+        run: |
+          $path = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\nobs-pdf-desktop.exe"
+          $signature = Get-AuthenticodeSignature $path
+          if ($signature.Status -ne "Valid") { throw "Application signature is $($signature.Status)" }
+
+      - name: Bundle NSIS installer
+        working-directory: desktop
+        shell: pwsh
+        run: npm run tauri -- bundle --bundles nsis --config src-tauri/tauri.windows.conf.json --target $env:WINDOWS_TARGET --ci
+
+      - name: Sign NSIS installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify and name signed installer
+        shell: pwsh
+        run: |
+          $folder = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
+          $installer = Get-ChildItem $folder -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer was not produced" }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne "Valid") { throw "Installer signature is $($signature.Status)" }
+          Move-Item $installer.FullName (Join-Path $folder "NoBS-PDF-1.0.0-Windows-x64-setup.exe")
+
+      - name: Upload signed RC artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoBS-PDF-1.0.0-Windows-x64-signed
+          path: desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 14

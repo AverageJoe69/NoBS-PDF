@@ -17,6 +17,7 @@ const config = {
   appBaseUrl: "http://localhost:4173",
   releaseVersion: "1.0.0",
   activationLimit: 2,
+  releases: { macOS: true, Windows: true },
   downloads: { macOS: "https://downloads.example.test/nobs.dmg", Windows: "https://downloads.example.test/nobs.exe" },
 };
 
@@ -54,7 +55,7 @@ function activationBody(key, device = "00000000-0000-4000-8000-000000000001") {
   return { license_key: key, device_identifier: device, app_version: "1.0.0", platform: "macos" };
 }
 
-function harness(session = paidSession()) {
+function harness(session = paidSession(), appConfig = config) {
   const store = createStore(":memory:");
   const calls = [];
   const stripe = {
@@ -75,7 +76,7 @@ function harness(session = paidSession()) {
     paymentIntents: { retrieve: async () => ({ payment_details: { order_reference: session.id } }) },
     billingPortal: { sessions: { create: async (params) => { calls.push({ portal: params }); return { url: "https://billing.stripe.test/session" }; } } },
   };
-  return { app: createApp({ stripe, store, config }), store, calls };
+  return { app: createApp({ stripe, store, config: appConfig }), store, calls };
 }
 
 function signedEvent(session = paidSession(), eventId = "evt_test_123") {
@@ -103,6 +104,7 @@ test("production configuration rejects test keys, localhost, unsafe storage, and
     NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_test_wrong", STRIPE_WEBHOOK_SECRET: "whsec_test",
     STRIPE_PRICE_ID: "price_live", APP_BASE_URL: "http://localhost:4173", DATABASE_PATH: "/tmp/nobs.sqlite",
     NOBS_RELEASE_VERSION: "1.0.0", MACOS_DOWNLOAD_URL: "http://localhost/app.dmg", WINDOWS_DOWNLOAD_URL: "https://downloads.example.com/app.exe",
+    MACOS_RELEASE_ENABLED: "true", WINDOWS_RELEASE_ENABLED: "true",
   }), /Unsafe production configuration/);
 });
 
@@ -111,11 +113,21 @@ test("production configuration accepts explicit live HTTPS versioned values", ()
     NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_live_example", STRIPE_WEBHOOK_SECRET: "whsec_example",
     STRIPE_PRICE_ID: "price_example", APP_BASE_URL: "https://nobs-pdf.com", DATABASE_PATH: "/var/lib/nobspdf/nobs.sqlite",
     NOBS_RELEASE_VERSION: "1.0.0", TRUST_PROXY_MODE: "cloudflare-railway", MACOS_DOWNLOAD_URL: "https://downloads.nobs-pdf.com/1.0.0/app.dmg",
-    WINDOWS_DOWNLOAD_URL: "https://downloads.nobs-pdf.com/1.0.0/app.exe",
+    WINDOWS_DOWNLOAD_URL: "https://downloads.nobs-pdf.com/1.0.0/app.exe", MACOS_RELEASE_ENABLED: "false", WINDOWS_RELEASE_ENABLED: "true",
   });
   assert.equal(result.production, true);
   assert.equal(result.releaseVersion, "1.0.0");
   assert.equal(result.trustProxyMode, "cloudflare-railway");
+  assert.deepEqual(result.releases, { macOS: false, Windows: true });
+  assert.equal(result.downloads.macOS, "");
+});
+
+test("production requires a URL only for an explicitly enabled platform", () => {
+  assert.throws(() => loadConfig({
+    NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_live_example", STRIPE_WEBHOOK_SECRET: "whsec_example",
+    STRIPE_PRICE_ID: "price_example", APP_BASE_URL: "https://nobs-pdf.com", DATABASE_PATH: "/var/lib/nobspdf/nobs.sqlite",
+    NOBS_RELEASE_VERSION: "1.0.0", MACOS_RELEASE_ENABLED: "false", WINDOWS_RELEASE_ENABLED: "true",
+  }), /WINDOWS_DOWNLOAD_URL/);
 });
 
 test("Cloudflare and Railway proxy trust rejects caller-supplied forwarding hops", () => {
@@ -299,6 +311,17 @@ test("verified purchase can be retrieved and download is authorized", async (t) 
   const download = await request(app).get(`/api/download/mac?session_id=${session.id}`);
   assert.equal(download.status, 303);
   assert.equal(download.headers.location, config.downloads.macOS);
+});
+
+test("disabled platform is neither entitled nor downloadable", async (t) => {
+  const session = paidSession();
+  const disabledConfig = { ...config, releases: { macOS: false, Windows: true }, downloads: { macOS: "", Windows: config.downloads.Windows } };
+  const { app, store } = harness(session, disabledConfig); t.after(() => store.close());
+  await deliver(app, signedEvent(session, "evt_windows_only"));
+  const purchase = await request(app).get(`/api/purchases/${session.id}`);
+  assert.deepEqual(purchase.body.purchase.downloads, { macOS: false, Windows: true });
+  assert.equal((await request(app).get(`/api/download/mac?session_id=${session.id}`)).status, 404);
+  assert.equal((await request(app).get(`/api/download/windows?session_id=${session.id}`)).status, 303);
 });
 
 test("verified subscriber can open Stripe hosted Customer Portal without customer data exposure", async (t) => {

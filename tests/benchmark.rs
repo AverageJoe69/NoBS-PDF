@@ -9,11 +9,19 @@ use serde_json::Value;
 static REPORT: OnceLock<BenchmarkReport> = OnceLock::new();
 static MANIFEST: OnceLock<Value> = OnceLock::new();
 
+fn pdfium_library() -> &'static Path {
+    if cfg!(target_os = "windows") {
+        Path::new("vendor/pdfium/bin/pdfium.dll")
+    } else {
+        Path::new("vendor/pdfium/lib/libpdfium.dylib")
+    }
+}
+
 fn report() -> &'static BenchmarkReport {
     REPORT.get_or_init(|| {
         pdfdoctor::benchmark::run_1080p(
             Path::new("tests/MT_AngelRaise_01.pdf"),
-            Some(Path::new("vendor/pdfium/lib/libpdfium.dylib")),
+            Some(pdfium_library()),
         )
         .expect("golden benchmark must complete")
     })
