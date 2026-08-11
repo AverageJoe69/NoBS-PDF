@@ -6,7 +6,9 @@ use lopdf::{
     dictionary, Document, Object, Stream,
 };
 use pdfdoctor::{
-    exporter::{export_1080p, export_original_resolution, ExportError, ExportOptions},
+    exporter::{
+        export_1080p, export_for_scale, export_original_resolution, ExportError, ExportOptions,
+    },
     parser::InspectionError,
     validator::validate_export,
 };
@@ -177,6 +179,40 @@ fn matches_jpeg_to_document_pixels_without_changing_placement_geometry() {
     );
     assert_eq!(before.images[0].filters, after.images[0].filters);
     assert!(after.images[0].encoded_bytes < before.images[0].encoded_bytes);
+}
+
+#[test]
+fn percentage_export_uses_detected_canvas_and_preserves_native_content() {
+    let directory = TempDir::new().unwrap();
+    let input = directory.path().join("input.pdf");
+    fixture(&input);
+    for (scale, expected) in [(100, [300, 200]), (50, [150, 100]), (10, [30, 20])] {
+        let output = directory.path().join(format!("output-{scale}.pdf"));
+        let before = pdfdoctor::inspect(&input).unwrap();
+        let report = export_for_scale(
+            &input,
+            &output,
+            &ExportOptions { dry_run: false },
+            scale,
+            |_| {},
+        )
+        .unwrap();
+        let after = pdfdoctor::inspect(&output).unwrap();
+        assert!(report.validation.as_ref().unwrap().passed);
+        assert_eq!(report.document_target.scale_percent, Some(scale));
+        assert_eq!(after.images[0].pixel_width, expected[0]);
+        assert_eq!(after.images[0].pixel_height, expected[1]);
+        assert_eq!(before.pages[0].width_pt, after.pages[0].width_pt);
+        assert_eq!(before.pages[0].height_pt, after.pages[0].height_pt);
+        assert_eq!(
+            before.pages[0].object_counts.text_operations,
+            after.pages[0].object_counts.text_operations
+        );
+        assert_eq!(
+            before.pages[0].object_counts.vector_operations,
+            after.pages[0].object_counts.vector_operations
+        );
+    }
 }
 
 #[test]

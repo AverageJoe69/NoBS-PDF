@@ -12,9 +12,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    exporter::{export_for_target, ExportOptions, ExportReport},
+    exporter::{export_for_scale, export_for_target, ExportOptions, ExportReport},
     flatten_pages::{flatten_pages, flatten_pages_preserve_text, FlattenReport},
     inspect,
+    resolution::{detect_document_resolution, DocumentResolution, PageRasterBudget},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +45,7 @@ pub struct DocumentSummary {
     pub size_bytes: u64,
     pub page_count: usize,
     pub image_count: usize,
+    pub resolution: DocumentResolution,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +59,8 @@ pub struct OptimisationEstimate {
     pub profile: String,
     pub document_long_dimension_px: Option<u32>,
     pub bloated_images: Vec<BloatedImage>,
+    pub scale_percent: Option<u8>,
+    pub page_budgets: Vec<PageRasterBudget>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +88,8 @@ pub struct OptimisationResult {
     pub vectors_preserved: bool,
     pub aspect_ratios_preserved: bool,
     pub image_placement_preserved: bool,
+    pub scale_percent: Option<u8>,
+    pub page_budgets: Vec<PageRasterBudget>,
 }
 
 #[derive(Clone, Default)]
@@ -100,6 +106,7 @@ impl CancellationToken {
 pub fn inspect_pdf(path: &Path) -> Result<DocumentSummary, AppError> {
     validate_pdf_path(path)?;
     let report = inspect(path).map_err(map_inspection_error)?;
+    let resolution = detect_document_resolution(&report);
     Ok(DocumentSummary {
         path: path.display().to_string(),
         filename: path
@@ -110,6 +117,7 @@ pub fn inspect_pdf(path: &Path) -> Result<DocumentSummary, AppError> {
         size_bytes: report.file.size_bytes,
         page_count: report.file.page_count,
         image_count: report.images.len(),
+        resolution,
     })
 }
 
@@ -132,6 +140,8 @@ pub fn estimate_pdf(path: &Path, profile: &str) -> Result<OptimisationEstimate, 
             profile: profile.into(),
             document_long_dimension_px: Some(long_dimension),
             bloated_images: vec![],
+            scale_percent: None,
+            page_budgets: vec![],
         });
     }
     ensure_supported_profile(profile)?;
@@ -184,6 +194,70 @@ pub fn estimate_pdf(path: &Path, profile: &str) -> Result<OptimisationEstimate, 
         document_long_dimension_px: (report.document_target.long_dimension_px > 0)
             .then_some(report.document_target.long_dimension_px),
         bloated_images,
+        scale_percent: None,
+        page_budgets: report.document_target.pages.clone(),
+    })
+}
+
+pub fn estimate_pdf_scale(
+    path: &Path,
+    scale_percent: u8,
+) -> Result<OptimisationEstimate, AppError> {
+    validate_pdf_path(path)?;
+    let placeholder = default_output_path(path, &format!("{scale_percent}pct"));
+    let report = export_for_scale(
+        path,
+        &placeholder,
+        &ExportOptions { dry_run: true },
+        scale_percent,
+        |_| {},
+    )
+    .map_err(map_export_error)?;
+    estimate_from_report(report, scale_percent)
+}
+
+fn estimate_from_report(
+    report: ExportReport,
+    scale_percent: u8,
+) -> Result<OptimisationEstimate, AppError> {
+    let saving = report.size.estimated_saving_bytes;
+    let output = report.input.size_bytes.checked_sub(saving);
+    let bloated_images = report
+        .image_results
+        .iter()
+        .filter(|image| image.status == "would_modify")
+        .filter_map(|image| {
+            let target = image.target_pixels?;
+            let source_count =
+                u64::from(image.source_pixels[0]) * u64::from(image.source_pixels[1]);
+            let target_count = u64::from(target[0]) * u64::from(target[1]);
+            let after = if source_count == 0 {
+                image.original_bytes
+            } else {
+                ((u128::from(image.original_bytes) * u128::from(target_count))
+                    / u128::from(source_count)) as u64
+            };
+            Some(BloatedImage {
+                object_id: image.object_id.clone(),
+                file_pixels: image.source_pixels,
+                document_pixels: target,
+                original_bytes: image.original_bytes,
+                estimated_saving_bytes: image.original_bytes.saturating_sub(after),
+            })
+        })
+        .collect();
+    Ok(OptimisationEstimate {
+        original_size_bytes: report.input.size_bytes,
+        estimated_output_size_bytes: output,
+        estimated_saving_bytes: Some(saving),
+        estimated_saving_percent: Some(saving as f64 * 100.0 / report.input.size_bytes as f64),
+        candidate_images: report.images.modified,
+        skipped_images: report.images.skipped,
+        profile: format!("scale_{scale_percent}"),
+        document_long_dimension_px: None,
+        bloated_images,
+        scale_percent: Some(scale_percent),
+        page_budgets: report.document_target.pages,
     })
 }
 
@@ -194,6 +268,60 @@ pub fn optimise_pdf(
     cancellation: &CancellationToken,
 ) -> Result<OptimisationResult, AppError> {
     optimise_pdf_with_options(path, profile, output, cancellation, None, |_| {})
+}
+
+pub fn optimise_pdf_scale_with_options(
+    path: &Path,
+    scale_percent: u8,
+    output: &Path,
+    cancellation: &CancellationToken,
+    mut progress: impl FnMut(&str),
+) -> Result<OptimisationResult, AppError> {
+    validate_pdf_path(path)?;
+    if !(10..=100).contains(&scale_percent) {
+        return Err(simple_error(
+            AppErrorCode::OptimisationFailed,
+            "Document size must be between 10% and 100%.",
+        ));
+    }
+    if cancellation.is_cancelled() {
+        return Err(simple_error(
+            AppErrorCode::Cancelled,
+            "Optimisation was cancelled.",
+        ));
+    }
+    let parent = output
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if !parent.exists() {
+        return Err(simple_error(
+            AppErrorCode::OutputDirectoryMissing,
+            "The selected output folder does not exist.",
+        ));
+    }
+    if output.exists() {
+        return Err(simple_error(
+            AppErrorCode::OutputExists,
+            "The selected output file already exists.",
+        ));
+    }
+    let report = export_for_scale(
+        path,
+        output,
+        &ExportOptions { dry_run: false },
+        scale_percent,
+        &mut progress,
+    )
+    .map_err(map_export_error)?;
+    if cancellation.is_cancelled() {
+        let _ = fs::remove_file(output);
+        return Err(simple_error(
+            AppErrorCode::Cancelled,
+            "Optimisation was cancelled.",
+        ));
+    }
+    result_from_report(report)
 }
 pub fn optimise_pdf_with_progress(
     path: &Path,
@@ -333,6 +461,8 @@ fn result_from_report(report: ExportReport) -> Result<OptimisationResult, AppErr
         vectors_preserved: validation.vector_content_preserved,
         aspect_ratios_preserved: validation.image_aspect_ratios_preserved,
         image_placement_preserved: validation.image_placement_preserved,
+        scale_percent: report.document_target.scale_percent,
+        page_budgets: report.document_target.pages,
     })
 }
 fn validate_pdf_path(path: &Path) -> Result<(), AppError> {
@@ -451,6 +581,8 @@ fn result_from_flatten_report(report: FlattenReport) -> Result<OptimisationResul
         vectors_preserved: false,
         aspect_ratios_preserved: validation.page_boxes_preserved,
         image_placement_preserved: false,
+        scale_percent: None,
+        page_budgets: vec![],
     })
 }
 fn map_flatten_error(error: crate::flatten_pages::FlattenError) -> AppError {
@@ -619,5 +751,25 @@ mod tests {
         assert!(result.validation_passed);
         assert!(output.exists());
         assert_eq!(result.images_optimised, 0);
+    }
+
+    #[test]
+    fn scale_api_rejects_encrypted_fixture_with_product_message_and_no_output() {
+        let input = Path::new("tests/fixtures/encrypted_password_nobs-test.pdf");
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("encrypted-output.pdf");
+        let error = optimise_pdf_scale_with_options(
+            input,
+            100,
+            &output,
+            &CancellationToken::default(),
+            |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.message,
+            "Encrypted PDFs are not supported. Decrypt the document before optimising it."
+        );
+        assert!(!output.exists());
     }
 }

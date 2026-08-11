@@ -4,6 +4,23 @@ export type DocumentSummary = {
   size_bytes: number;
   page_count: number;
   image_count: number;
+  resolution: DocumentResolution;
+};
+export type PageClassification = "digital" | "physical" | "vector_only" | "ambiguous";
+export type PageRasterBudget = {
+  page_number: number;
+  classification: PageClassification;
+  budget_100_percent: [number, number] | null;
+  display_dimensions: boolean;
+  confidence: boolean;
+  reason: string;
+};
+export type DocumentResolution = {
+  pages: PageRasterBudget[];
+  has_raster_content: boolean;
+  mixed_page_sizes: boolean;
+  representative_100_percent: [number, number] | null;
+  adaptive: boolean;
 };
 export type BloatedImage = {
   object_id: string;
@@ -22,6 +39,8 @@ export type Estimate = {
   profile: string;
   document_long_dimension_px: number | null;
   bloated_images: BloatedImage[];
+  scale_percent: number | null;
+  page_budgets: PageRasterBudget[];
 };
 export type Result = {
   mode: string;
@@ -38,6 +57,8 @@ export type Result = {
   vectors_preserved: boolean;
   aspect_ratios_preserved: boolean;
   image_placement_preserved: boolean;
+  scale_percent: number | null;
+  page_budgets: PageRasterBudget[];
 };
 export type AppError = { code: string; message: string; detail?: string };
 export type Stage =

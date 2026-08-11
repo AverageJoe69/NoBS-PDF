@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Mutex};
 use pdfdoctor::app::{
     self, AppError, CancellationToken, DocumentSummary, OptimisationEstimate, OptimisationResult,
 };
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 mod licensing;
 use licensing::LicenceStatus;
@@ -19,9 +19,9 @@ async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
 }
 
 #[tauri::command]
-async fn estimate_pdf(path: String, profile: String) -> Result<OptimisationEstimate, AppError> {
+async fn estimate_pdf(path: String, scale_percent: u8) -> Result<OptimisationEstimate, AppError> {
     require_licence()?;
-    tauri::async_runtime::spawn_blocking(move || app::estimate_pdf(&PathBuf::from(path), &profile))
+    tauri::async_runtime::spawn_blocking(move || app::estimate_pdf_scale(&PathBuf::from(path), scale_percent))
         .await
         .map_err(join_error)?
 }
@@ -31,24 +31,18 @@ async fn optimise_pdf(
     app_handle: AppHandle,
     state: State<'_, OptimisationState>,
     path: String,
-    profile: String,
+    scale_percent: u8,
     output_path: String,
 ) -> Result<OptimisationResult, AppError> {
     require_licence()?;
     let token = CancellationToken::default();
     *state.0.lock().expect("optimisation state poisoned") = token.clone();
-    let pdfium_library = app_handle
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|directory| directory.join(pdfium_library_name()));
     tauri::async_runtime::spawn_blocking(move || {
-        app::optimise_pdf_with_options(
+        app::optimise_pdf_scale_with_options(
             &PathBuf::from(path),
-            &profile,
+            scale_percent,
             &PathBuf::from(output_path),
             &token,
-            pdfium_library.as_deref(),
             |stage| {
                 let _ = app_handle.emit("optimisation-stage", stage);
             },
@@ -56,14 +50,6 @@ async fn optimise_pdf(
     })
     .await
     .map_err(join_error)?
-}
-
-fn pdfium_library_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "pdfium.dll"
-    } else {
-        "libpdfium.dylib"
-    }
 }
 
 #[tauri::command]
@@ -145,7 +131,10 @@ mod licensing_boundary_tests {
                 "async fn estimate_pdf",
                 "#[tauri::command]\nasync fn optimise_pdf",
             ),
-            ("async fn optimise_pdf", "fn pdfium_library_name"),
+            (
+                "async fn optimise_pdf",
+                "#[tauri::command]\nfn cancel_optimisation",
+            ),
         ] {
             let body = source
                 .split_once(function)

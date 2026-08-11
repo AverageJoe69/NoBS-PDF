@@ -23,7 +23,7 @@ const stages: Stage[] = [
 const labels: Record<Stage, string> = {
   analysing: "Analysing PDF…",
   planning: "Planning safe changes…",
-  optimising: "Optimising raster artwork…",
+  optimising: "Optimising images…",
   rebuilding: "Rebuilding PDF…",
   validating: "Validating output…",
 };
@@ -38,18 +38,13 @@ const formatBytes = (value: number) =>
 
 function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   const [document, setDocument] = useState<DocumentSummary | null>(null);
-  const [resolution, setResolution] = useState("source");
-  const [flatten, setFlatten] = useState(false);
-  const [preserveText, setPreserveText] = useState(true);
+  const [scale, setScale] = useState(100);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState<Stage | null>(null);
-  const profile = flatten
-    ? `${preserveText ? "flatten_text" : "flatten"}:${resolution}`
-    : resolution;
   useEffect(() => {
     const unlisten = getCurrentWebviewWindow().onDragDropEvent((event) => {
       if (event.payload.type === "over") {
@@ -70,10 +65,21 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
       void stageListener.then((fn) => fn());
     };
   }, []);
+  useEffect(() => {
+    if (!document || !document.resolution.has_raster_content) return;
+    const timer = window.setTimeout(() => {
+      setError(null);
+      setLoading(true);
+      setStage("planning");
+      void invoke<Estimate>("estimate_pdf", { path: document.path, scalePercent: scale })
+        .then(setEstimate)
+        .catch((value) => setError(value as AppError))
+        .finally(() => { setLoading(false); setStage(null); });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [document, scale]);
   async function loadPdf(path: string) {
-    setResolution("source");
-    setFlatten(false);
-    setPreserveText(true);
+    setScale(100);
     setError(null);
     setResult(null);
     setEstimate(null);
@@ -82,40 +88,9 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
     try {
       const summary = await invoke<DocumentSummary>("inspect_pdf", { path });
       setDocument(summary);
-      setStage("planning");
-      setEstimate(
-        await invoke<Estimate>("estimate_pdf", { path, profile: "source" }),
-      );
+      if (!summary.resolution.has_raster_content) setEstimate(null);
     } catch (value) {
       setDocument(null);
-      setError(value as AppError);
-    } finally {
-      setLoading(false);
-      setStage(null);
-    }
-  }
-  async function changeOptions(
-    nextResolution: string,
-    nextFlatten: boolean,
-    nextPreserveText = preserveText,
-  ) {
-    setResolution(nextResolution);
-    setFlatten(nextFlatten);
-    if (!document) return;
-    setError(null);
-    setEstimate(null);
-    setLoading(true);
-    setStage("planning");
-    try {
-      setEstimate(
-        await invoke<Estimate>("estimate_pdf", {
-          path: document.path,
-          profile: nextFlatten
-            ? `${nextPreserveText ? "flatten_text" : "flatten"}:${nextResolution}`
-            : nextResolution,
-        }),
-      );
-    } catch (value) {
       setError(value as AppError);
     } finally {
       setLoading(false);
@@ -132,7 +107,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   }
   async function optimise() {
     if (!document) return;
-    const suffix = `${flatten ? "Flattened_" : ""}${resolution === "source" ? "Source" : resolution}`;
+    const suffix = `${scale}pct`;
     const suggested = document.filename.replace(
       /\.pdf$/i,
       `_NoBS_${suffix}.pdf`,
@@ -149,7 +124,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
       setResult(
         await invoke<Result>("optimise_pdf", {
           path: document.path,
-          profile,
+          scalePercent: scale,
           outputPath: output,
         }),
       );
@@ -164,9 +139,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
     await invoke("cancel_optimisation");
   }
   function reset() {
-    setResolution("source");
-    setFlatten(false);
-    setPreserveText(true);
+    setScale(100);
     setDocument(null);
     setEstimate(null);
     setResult(null);
@@ -174,22 +147,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
     setStage(null);
   }
   if (result) {
-    const flattened = result.mode.startsWith("flatten");
-    const textPreserved = result.mode === "flatten_text";
-    const checks = flattened
-      ? [
-          ["Raster artwork flattened", true],
-          [
-            textPreserved
-              ? "Selectable text preserved"
-              : "Pages intentionally rasterised",
-            textPreserved ? result.text_preserved : true,
-          ],
-          ["Aspect ratios preserved", result.aspect_ratios_preserved],
-          ["Page geometry preserved", result.page_layout_preserved],
-          ["PDF validated", result.validation_passed],
-        ]
-      : [
+    const checks = [
           ["Text preserved", result.text_preserved],
           ["Vector artwork preserved", result.vectors_preserved],
           ["Aspect ratios preserved", result.aspect_ratios_preserved],
@@ -201,16 +159,8 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
         <Brand onManageLicence={onManageLicence} />
         <section className="success">
           <div className="successMark">✓</div>
-          <p className="eyebrow">{flattened ? "FLATTENED" : "OPTIMISED"}</p>
+          <p className="eyebrow">OPTIMISED · {result.scale_percent ?? 100}% SIZE</p>
           <h1>Your PDF is ready.</h1>
-          {flattened && !textPreserved && (
-            <div className="warning compact">
-              <strong>Full-page raster copy</strong>
-              <span>
-                Text is no longer selectable and vectors are now pixels.
-              </span>
-            </div>
-          )}
           <div className="resultGrid">
             <Metric
               label="Original"
@@ -280,71 +230,8 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
               </button>
             </div>
             <div className="rule" />
-            <label>
-              DOCUMENT RESOLUTION
-              <select
-                value={resolution}
-                onChange={(event) =>
-                  void changeOptions(event.target.value, flatten)
-                }
-              >
-                <option value="source">Same as source</option>
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="1440p">1440p</option>
-                <option value="4k">4K</option>
-              </select>
-            </label>
-            <div className="optionRow">
-              <div>
-                <strong>FLATTEN PAGE ARTWORK</strong>
-                <span>
-                  Combine page artwork into a single optimised raster layer.
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={flatten}
-                onChange={(event) =>
-                  void changeOptions(resolution, event.target.checked)
-                }
-              />
-            </div>
-            {flatten && (
-              <div className="optionRow">
-                <div>
-                  <strong>Preserve selectable text</strong>
-                  <span>
-                    Keep text separate and selectable above the raster layer.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={preserveText}
-                  onChange={(event) => {
-                    setPreserveText(event.target.checked);
-                    void changeOptions(resolution, true, event.target.checked);
-                  }}
-                />
-              </div>
-            )}
-            {flatten ? (
-              <div className="warning">
-                <strong>Rasterisation is destructive to vector artwork</strong>
-                <span>
-                  Vector graphics will become pixels. Text can remain selectable
-                  if enabled.
-                </span>
-              </div>
-            ) : (
-              <div className="lock">
-                ⌁{" "}
-                <span>
-                  Page geometry, image placement and aspect ratios preserved
-                </span>
-                <b>LOCKED</b>
-              </div>
-            )}
+            <SizeControl document={document} scale={scale} onChange={setScale} />
+            <div className="lock">⌁ <span>Text, graphics and page layout stay sharp and unchanged</span><b>LOCKED</b></div>
             {estimate && (
               <div className="estimate">
                 <Metric
@@ -370,15 +257,12 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
                 </div>
               </div>
             )}
-            {estimate && !flatten && (
-              <AnalysisSummary estimate={estimate} profile={profile} />
-            )}
             <button
               className="primary optimise"
-              disabled={loading || !estimate}
+              disabled={loading || (document.resolution.has_raster_content && !estimate)}
               onClick={optimise}
             >
-              {flatten ? "Flatten & optimise" : "Optimise PDF"}
+              Optimise
             </button>
           </>
         )}
@@ -457,71 +341,28 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AnalysisSummary({
-  estimate,
-  profile,
-}: {
-  estimate: Estimate;
-  profile: string;
-}) {
-  const originalResolution = profile === "source";
-  return (
-    <section className="analysisSummary">
-      <div className="summaryHead">
-        <div>
-          <span className="eyebrow">INITIAL SUMMARY</span>
-          <strong>
-            {estimate.bloated_images.length}{" "}
-            {originalResolution ? "oversized" : "bloated"}{" "}
-            {estimate.bloated_images.length === 1 ? "image" : "images"}
-          </strong>
-        </div>
-        <b>
-          {originalResolution
-            ? "Matched to placed document pixels"
-            : `Document target: ${estimate.document_long_dimension_px}px`}
-        </b>
-      </div>
-      {estimate.bloated_images.length ? (
-        <div className="imageList">
-          {estimate.bloated_images.map((image) => (
-            <div className="imageRow" key={image.object_id}>
-              <div className="imageIdentity">
-                <strong>{image.object_id}</strong>
-                <span>{formatBytes(image.original_bytes)}</span>
-              </div>
-              <div>
-                <small>FILE RESOLUTION</small>
-                <b>
-                  {image.file_pixels[0]} × {image.file_pixels[1]} px
-                </b>
-              </div>
-              <div className="arrow">→</div>
-              <div>
-                <small>
-                  {originalResolution
-                    ? "PIXELS USED IN PDF"
-                    : "DOCUMENT PIXELS"}
-                </small>
-                <b>
-                  {image.document_pixels[0]} × {image.document_pixels[1]} px
-                </b>
-              </div>
-              <em>~{formatBytes(image.estimated_saving_bytes)} saved</em>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="allGood">
-          ✓ No safely{" "}
-          {originalResolution
-            ? "placement-oversized"
-            : "downsampleable bloated"}{" "}
-          images were found.
-        </p>
-      )}
-    </section>
-  );
+function scaledDimensions(dimensions: [number, number], scale: number) {
+  return dimensions.map((value) => Math.max(1, Math.round(value * scale / 100))) as [number, number];
+}
+
+function SizeControl({ document, scale, onChange }: { document: DocumentSummary; scale: number; onChange: (scale: number) => void }) {
+  const resolution = document.resolution;
+  const dimensions = resolution.representative_100_percent;
+  const scaled = dimensions ? scaledDimensions(dimensions, scale) : null;
+  const vectorOnly = !resolution.has_raster_content;
+  const title = vectorOnly ? "Native vector document" : resolution.adaptive && !dimensions
+    ? "Adaptive raster document" : resolution.mixed_page_sizes ? "Mixed page sizes"
+    : dimensions ? `${dimensions[0]} × ${dimensions[1]}` : "Adaptive raster document";
+  return <section className={`sizeControl ${vectorOnly ? "disabled" : ""}`}>
+    <div className="sizeHeading"><div><span>DOCUMENT SIZE</span><strong>{title}</strong></div>
+      {!vectorOnly && resolution.mixed_page_sizes && dimensions && <small>Up to {dimensions[0]} × {dimensions[1]} at 100%</small>}
+      {vectorOnly && <small>No raster content needs resizing.</small>}
+    </div>
+    <div className="sliderLabels"><span>10%</span><b>SIZE</b><span>100%</span></div>
+    <input type="range" min="10" max="100" step="1" value={scale} disabled={vectorOnly} aria-label="Document size percentage" onChange={(event) => onChange(Number(event.target.value))} />
+    <div className="scaleResult"><strong>{vectorOnly ? "100% · Native vector" : `${scale}%${scale === 100 ? " · Original" : ""}`}</strong><span>{vectorOnly ? "Text and graphics remain native" : scaled ? `${scaled[0]} × ${scaled[1]}` : `${scale}% raster limit`}</span></div>
+    {!vectorOnly && <p className="sizeNote">{scale === 100 ? "Original document size · oversized images are still optimised." : "Only images are reduced · text and graphics stay sharp."}</p>}
+  </section>;
 }
 
 function formatLicenceInput(value: string) {

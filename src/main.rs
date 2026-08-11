@@ -50,6 +50,16 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Export with the detected per-page raster budget and a 10–100% size scale.
+    ScaleExport {
+        input: PathBuf,
+        #[arg(long, value_parser = clap::value_parser!(u8).range(10..=100))]
+        scale: u8,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Merge provably safe raster-first page content into one raster layer.
     RasterMerge {
         input: PathBuf,
@@ -176,6 +186,25 @@ fn main() {
                 .map_err(Into::into)
             }
         }
+        Command::ScaleExport {
+            input,
+            scale,
+            output,
+            dry_run,
+        } => pdfdoctor::exporter::export_for_scale(
+            &input,
+            &output,
+            &pdfdoctor::exporter::ExportOptions { dry_run },
+            scale,
+            |_| {},
+        )
+        .map(|report| {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect("serializable report")
+            )
+        })
+        .map_err(Into::into),
         Command::RasterMerge {
             input,
             document_target,

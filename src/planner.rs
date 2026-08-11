@@ -18,6 +18,8 @@ pub struct PlannerConfig {
     /// A downsample is proposed only when both axes exceed target by this ratio.
     pub oversampling_threshold: f64,
     pub document_target: Option<DocumentTargetProfile>,
+    /// Per-page raster canvases used by the desktop percentage model.
+    pub page_raster_budgets: Option<HashMap<u32, [u32; 2]>>,
 }
 
 impl Default for PlannerConfig {
@@ -26,6 +28,7 @@ impl Default for PlannerConfig {
             target_dpi: 300,
             oversampling_threshold: 1.25,
             document_target: None,
+            page_raster_budgets: None,
         }
     }
 }
@@ -277,8 +280,12 @@ pub fn create_plan(inspection: &AnalysisResult, config: &PlannerConfig) -> Optim
         .pages
         .iter()
         .filter_map(|page| {
-            page_render_dimensions(page, config.document_target.as_ref())
-                .map(|dimensions| (page.page_number, dimensions))
+            page_render_dimensions(
+                page,
+                config.document_target.as_ref(),
+                config.page_raster_budgets.as_ref(),
+            )
+            .map(|dimensions| (page.page_number, dimensions))
         })
         .collect::<HashMap<_, _>>();
 
@@ -358,7 +365,9 @@ pub fn create_plan(inspection: &AnalysisResult, config: &PlannerConfig) -> Optim
                 .is_none()
                 .then_some(config.target_dpi),
             oversampling_threshold: config.oversampling_threshold,
-            optimisation_model: if config.document_target.is_some() {
+            optimisation_model: if config.document_target.is_some()
+                || config.page_raster_budgets.is_some()
+            {
                 "screen_render_occupancy".into()
             } else {
                 "print_effective_dpi".into()
@@ -386,23 +395,22 @@ fn plan_image(
     page_dimensions: &HashMap<u32, (f64, f64)>,
 ) -> ImagePlan {
     let limiting = limiting_dpi(&image.placements);
-    let screen_target = config.document_target.as_ref().and_then(|profile| {
-        profile
-            .long_dimension_px()
-            .and_then(|_| screen_target_pixels(image, page_dimensions))
-    });
+    let screen_model = config.document_target.is_some() || config.page_raster_budgets.is_some();
+    let screen_target = screen_model
+        .then(|| screen_target_pixels(image, page_dimensions))
+        .flatten();
     let classification = if matches!(
         config.document_target,
         Some(DocumentTargetProfile::Original)
     ) {
         ResolutionClassification::Optimal
-    } else if config.document_target.is_some() {
+    } else if screen_model {
         classify_screen(image, screen_target, config.oversampling_threshold)
     } else {
         classify(limiting, config)
     };
     let target = if classification == ResolutionClassification::Oversampled {
-        let proposed = if config.document_target.is_some() {
+        let proposed = if screen_model {
             screen_target
         } else {
             conservative_target_pixels(image, config.target_dpi)
@@ -422,7 +430,7 @@ fn plan_image(
     });
     let estimated_saving = estimated_after.map(|after| image.encoded_bytes.saturating_sub(after));
     let encoding = encoding_kind(&image.filters);
-    let (recommendation, reason) = if config.document_target.is_some() {
+    let (recommendation, reason) = if screen_model {
         screen_recommendation(classification, target, screen_target, image, config)
     } else {
         recommendation(classification, target, limiting, image, config)
@@ -515,7 +523,22 @@ fn classify(dpi: Option<(f64, f64)>, config: &PlannerConfig) -> ResolutionClassi
 fn page_render_dimensions(
     page: &PdfPage,
     profile: Option<&DocumentTargetProfile>,
+    page_budgets: Option<&HashMap<u32, [u32; 2]>>,
 ) -> Option<(f64, f64)> {
+    if let Some(budget) = page_budgets.and_then(|budgets| budgets.get(&page.page_number)) {
+        let rotated = page.rotation_degrees.rem_euclid(180) == 90;
+        let (width_pt, height_pt) = if rotated {
+            (page.height_pt, page.width_pt)
+        } else {
+            (page.width_pt, page.height_pt)
+        };
+        if width_pt > 0.0 && height_pt > 0.0 {
+            return Some((
+                f64::from(budget[0]) / width_pt,
+                f64::from(budget[1]) / height_pt,
+            ));
+        }
+    }
     let long_px = f64::from(profile?.long_dimension_px()?);
     let long_pt = page.width_pt.max(page.height_pt);
     (long_pt.is_finite() && long_pt > 0.0).then_some((long_px / long_pt, long_px / long_pt))

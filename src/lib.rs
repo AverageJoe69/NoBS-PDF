@@ -12,6 +12,7 @@ pub mod optimisation;
 pub mod parser;
 pub mod planner;
 pub mod raster_merge;
+pub mod resolution;
 pub mod rewriter;
 pub mod validator;
 
