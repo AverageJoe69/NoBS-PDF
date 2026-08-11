@@ -103,11 +103,13 @@ site is same-origin and the native desktop HTTP client is not subject to browser
 CORS. Keep arbitrary browser origins disallowed.
 
 Activation has an in-memory per-IP limit of ten attempts per minute. It is valid
-only while the service remains single-instance and `TRUST_PROXY_MODE` is set to
-`cloudflare-railway`. That mode trusts Railway's immediate edge and only
-Cloudflare-published proxy networks beyond it; a numeric hop count is unsafe
-because the Railway hostname is an alternate, shorter path. Revalidate the
-published Cloudflare ranges before release. Add provider edge limits for `/api/checkout`,
+only while the service remains single-instance. The limiter uses Railway's
+edge-supplied `X-Real-IP` and deliberately ignores `X-Forwarded-For`. When that
+address belongs to a published Cloudflare proxy network it accepts
+`CF-Connecting-IP`; otherwise that header is ignored. `TRUST_PROXY_MODE` remains
+`cloudflare-railway` for Express proxy semantics, but a numeric hop count is
+unsafe because the Railway hostname is an alternate, shorter path. Revalidate
+the published Cloudflare ranges before release. Add provider edge limits for `/api/checkout`,
 `/api/license/*`, `/api/purchases/*`, downloads, and `/webhook`; exempt or size
 Stripe webhook limits carefully so legitimate retries are accepted. Do not add
 another application instance without first moving rate-limit state to a shared

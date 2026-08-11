@@ -1,5 +1,6 @@
 import express from "express";
 import { createHash } from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import { LICENCE_PATTERN, normalizeLicenceKey } from "../shared/license.js";
 import { noOpLogger, safeReference } from "./logger.js";
 
@@ -13,7 +14,7 @@ const CLOUDFLARE_IPV6 = [
   ["2400:cb00::", 32], ["2606:4700::", 32], ["2803:f800::", 32], ["2405:b500::", 32],
   ["2405:8100::", 32], ["2a06:98c0::", 29], ["2c0f:f248::", 32],
 ];
-const cloudflareProxies = new (await import("node:net")).BlockList();
+const cloudflareProxies = new BlockList();
 for (const [network, prefix] of CLOUDFLARE_IPV4) cloudflareProxies.addSubnet(network, prefix, "ipv4");
 for (const [network, prefix] of CLOUDFLARE_IPV6) cloudflareProxies.addSubnet(network, prefix, "ipv6");
 
@@ -22,6 +23,26 @@ export function trustCloudflareRailwayProxy(ip, hop) {
   const mapped = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
   const family = mapped.includes(":") ? "ipv6" : "ipv4";
   return cloudflareProxies.check(mapped, family);
+}
+
+function normalizedIp(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate || candidate.includes(",")) return "";
+  const mapped = candidate.startsWith("::ffff:") ? candidate.slice(7) : candidate;
+  return isIP(mapped) ? mapped : "";
+}
+
+export function clientIpForRateLimit(req) {
+  // Railway overwrites X-Real-IP at its edge. Never use caller-controlled
+  // X-Forwarded-For for security decisions.
+  const railwayIp = normalizedIp(req.get("x-real-ip"));
+  if (!railwayIp) return normalizedIp(req.socket?.remoteAddress) || "unknown";
+  const family = railwayIp.includes(":") ? "ipv6" : "ipv4";
+  if (!cloudflareProxies.check(railwayIp, family)) return railwayIp;
+
+  // Cloudflare's client header is authoritative only when Railway confirms
+  // that the immediate internet peer belongs to Cloudflare.
+  return normalizedIp(req.get("cf-connecting-ip")) || railwayIp;
 }
 
 const SESSION_ID = /^cs_(?:test_|live_)?[A-Za-z0-9]{8,}$/;
@@ -59,7 +80,7 @@ function isAnnualNoBsPrice(price, configuredId) {
 function activationRateLimit({ windowMs = 60_000, maximum = 10 } = {}) {
   const attempts = new Map();
   return (req, res, next) => {
-    const key = createHash("sha256").update(req.ip || "unknown").digest("hex");
+    const key = createHash("sha256").update(clientIpForRateLimit(req)).digest("hex");
     const now = Date.now();
     const current = attempts.get(key);
     if (!current || current.expires <= now) {

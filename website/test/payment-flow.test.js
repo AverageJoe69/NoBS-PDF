@@ -3,7 +3,7 @@ import test from "node:test";
 import Stripe from "stripe";
 import request from "supertest";
 import fs from "node:fs";
-import { createApp, trustCloudflareRailwayProxy } from "../server/app.js";
+import { clientIpForRateLimit, createApp, trustCloudflareRailwayProxy } from "../server/app.js";
 import { loadConfig } from "../server/config.js";
 import { generateLicenceKey } from "../server/license.js";
 import { createStore } from "../server/store.js";
@@ -147,6 +147,17 @@ test("Cloudflare and Railway proxy trust rejects caller-supplied forwarding hops
   assert.equal(trustCloudflareRailwayProxy("203.0.113.10", 1), false);
   assert.equal(trustCloudflareRailwayProxy("173.245.48.10", 2), true);
   assert.equal(trustCloudflareRailwayProxy("198.51.100.7", 2), false);
+});
+
+test("activation rate-limit identity ignores spoofed forwarding headers", () => {
+  const request = (headers, remoteAddress = "10.0.0.1") => ({
+    get: (name) => headers[name.toLowerCase()] || "",
+    socket: { remoteAddress },
+  });
+  assert.equal(clientIpForRateLimit(request({ "x-real-ip": "198.51.100.20", "x-forwarded-for": "203.0.113.1" })), "198.51.100.20");
+  assert.equal(clientIpForRateLimit(request({ "x-real-ip": "198.51.100.20", "x-forwarded-for": "203.0.113.99" })), "198.51.100.20");
+  assert.equal(clientIpForRateLimit(request({ "x-real-ip": "173.245.48.10", "cf-connecting-ip": "198.51.100.21" })), "198.51.100.21");
+  assert.equal(clientIpForRateLimit(request({ "x-real-ip": "198.51.100.20", "cf-connecting-ip": "203.0.113.5" })), "198.51.100.20");
 });
 
 test("licence keys are random and correctly formatted", () => {
