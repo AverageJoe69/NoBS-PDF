@@ -19,8 +19,7 @@
     "minimum_size_bytes": 9000000,
     "maximum_size_bytes": 16000000,
     "minimum_reduction_percent": 70.0,
-    "minimum_selectable_text_operations": 1,
-    "minimum_native_vector_operations": 1,
+    "expected_foreground_text_operations": 174,
     "expected_raster_objects_after": 15,
     "expected_pages_raster_composited": 15,
     "maximum_mean_render_error": 12.0
@@ -36,7 +35,7 @@
     "annotations": true,
     "aspect_ratios": true,
     "selectable_text_present": true,
-    "native_vectors_present": true,
+    "native_vectors_present": false,
     "rendered_pages": true
   }
 }

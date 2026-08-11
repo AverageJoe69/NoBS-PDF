@@ -37,6 +37,8 @@ This opt-in stage composites only provably safe direct raster-first page content
 
 ## Full-page raster export
 
+The normal Size export first attempts a paint-order-aware hybrid: artwork through the final safe non-text paint boundary becomes one raster layer at the detected page budget, while the untouched foreground text suffix remains native and searchable. It does not reorder content to rescue text below later artwork. Tagged, rotated, vector-only, or structurally inseparable pages use the conservative native-resource fallback.
+
 ```sh
 cargo run --release -- flatten-pages input.pdf --document-target 1080p --output flattened.pdf > flatten-report.json
 ```

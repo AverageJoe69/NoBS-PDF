@@ -17,7 +17,12 @@ use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use thiserror::Error;
 
-use crate::{inspect, planner::aspect_preserving_page_pixels, InspectionError};
+use crate::{
+    inspect,
+    planner::aspect_preserving_page_pixels,
+    resolution::{detect_document_resolution, scale_dimensions},
+    InspectionError,
+};
 
 #[derive(Debug, Error)]
 pub enum FlattenError {
@@ -37,6 +42,8 @@ pub enum FlattenError {
     RotatedPage(u32),
     #[error("validation failed: {0}")]
     Validation(String),
+    #[error("hybrid foreground-text export is unavailable: {0}")]
+    HybridUnavailable(String),
     #[error("could not persist output: {0}")]
     Persist(String),
 }
@@ -70,6 +77,16 @@ pub struct FlattenPageReport {
     pub original_vector_operations: usize,
     pub annotations_preserved: bool,
     pub mean_render_error: Option<f64>,
+    /// Zero-based content-stream operation index immediately after the artwork
+    /// prefix that was baked into the page raster.
+    pub flatten_boundary_operation: Option<usize>,
+    pub flatten_boundary_reason: Option<String>,
+    pub text_operations_below_boundary: usize,
+    pub text_operations_above_boundary: usize,
+    pub native_text_operations_retained: usize,
+    pub searchable_foreground_text_retained: Option<bool>,
+    pub raster_artwork_dimensions: [u32; 2],
+    pub visual_validation_passed: Option<bool>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FlattenValidation {
@@ -80,6 +97,8 @@ pub struct FlattenValidation {
     pub annotations_preserved: bool,
     pub exactly_one_page_image: bool,
     pub render_comparison_passed: bool,
+    pub foreground_text_extraction_preserved: bool,
+    pub document_navigation_preserved: bool,
     pub maximum_mean_render_error: f64,
 }
 #[derive(Clone)]
@@ -114,6 +133,7 @@ pub fn flatten_pages(
         long_dimension_px,
         profile,
         false,
+        None,
     )
 }
 
@@ -133,6 +153,60 @@ pub fn flatten_pages_preserve_text(
         long_dimension_px,
         profile,
         true,
+        None,
+    )
+}
+
+/// Export using the detected document raster budget while baking artwork below
+/// the final safe paint-order boundary and retaining only foreground text above it.
+pub fn flatten_pages_preserve_foreground_text_for_scale(
+    input: &Path,
+    output: &Path,
+    dry_run: bool,
+    pdfium_library: Option<&Path>,
+    scale_percent: u8,
+) -> Result<FlattenReport, FlattenError> {
+    let inspection = inspect(input)?;
+    let source_document = Document::load(input)?;
+    if source_document.catalog()?.has(b"StructTreeRoot") {
+        return Err(FlattenError::HybridUnavailable(
+            "tagged PDF structure requires the native fallback".into(),
+        ));
+    }
+    if let Some(page) = inspection
+        .pages
+        .iter()
+        .find(|page| page.rotation_degrees.rem_euclid(360) != 0)
+    {
+        return Err(FlattenError::HybridUnavailable(format!(
+            "page {} is rotated and requires the native fallback",
+            page.page_number
+        )));
+    }
+    let resolution = detect_document_resolution(&inspection);
+    let dimensions = resolution
+        .pages
+        .iter()
+        .map(|page| {
+            page.budget_100_percent
+                .map(|budget| scale_dimensions(budget, scale_percent))
+                .ok_or_else(|| {
+                    FlattenError::HybridUnavailable(format!(
+                        "page {} has no meaningful raster artwork budget",
+                        page.page_number
+                    ))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    flatten_pages_impl(
+        input,
+        output,
+        dry_run,
+        pdfium_library,
+        dimensions.iter().map(|d| d[0].max(d[1])).max().unwrap_or(0),
+        &format!("scale_{scale_percent}"),
+        true,
+        Some(dimensions),
     )
 }
 
@@ -144,6 +218,7 @@ fn flatten_pages_impl(
     long_dimension_px: u32,
     profile: &str,
     preserve_text: bool,
+    dimensions_override: Option<Vec<[u32; 2]>>,
 ) -> Result<FlattenReport, FlattenError> {
     reject_paths(input, output, dry_run)?;
     let source_hash = file_hash(input)?;
@@ -153,15 +228,23 @@ fn flatten_pages_impl(
             return Err(FlattenError::RotatedPage(page.page_number));
         }
     }
-    let dimensions = before
-        .pages
-        .iter()
-        .map(|p| {
-            aspect_preserving_page_pixels(p.width_pt, p.height_pt, long_dimension_px).ok_or_else(
-                || FlattenError::Validation(format!("invalid geometry on page {}", p.page_number)),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let dimensions = if let Some(dimensions) = dimensions_override {
+        dimensions
+    } else {
+        before
+            .pages
+            .iter()
+            .map(|p| {
+                aspect_preserving_page_pixels(p.width_pt, p.height_pt, long_dimension_px)
+                    .ok_or_else(|| {
+                        FlattenError::Validation(format!(
+                            "invalid geometry on page {}",
+                            p.page_number
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
     let mut page_reports = before
         .pages
         .iter()
@@ -174,6 +257,14 @@ fn flatten_pages_impl(
             original_vector_operations: p.object_counts.vector_operations,
             annotations_preserved: true,
             mean_render_error: None,
+            flatten_boundary_operation: None,
+            flatten_boundary_reason: None,
+            text_operations_below_boundary: 0,
+            text_operations_above_boundary: 0,
+            native_text_operations_retained: 0,
+            searchable_foreground_text_retained: None,
+            raster_artwork_dimensions: *d,
+            visual_validation_passed: None,
         })
         .collect::<Vec<_>>();
     let original_size = fs::metadata(input)?.len();
@@ -207,8 +298,16 @@ fn flatten_pages_impl(
         for (page_number, page_id) in graphics_document.get_pages() {
             let bytes = graphics_document.get_page_content_with_limit(page_id, usize::MAX)?;
             let content = Content::decode(&bytes)?;
-            let (background, _) =
-                split_at_top_raster(&graphics_document, page_id, &content, page_number)?;
+            let split =
+                split_at_flatten_boundary(&graphics_document, page_id, &content, page_number)?;
+            let report = &mut page_reports[(page_number - 1) as usize];
+            report.flatten_boundary_operation = Some(split.operation_index);
+            report.flatten_boundary_reason = Some(split.reason.clone());
+            report.text_operations_above_boundary = split.foreground_text_operations;
+            report.text_operations_below_boundary = report
+                .original_text_operations
+                .saturating_sub(split.foreground_text_operations);
+            let background = split.background;
             graphics_document.change_page_content(page_id, background.encode()?)?;
         }
         let temporary_graphics = Builder::new()
@@ -220,6 +319,9 @@ fn flatten_pages_impl(
     } else {
         original_rendered.clone()
     };
+    let expected_foreground_text = preserve_text
+        .then(|| extract_foreground_text(&original_document))
+        .transpose()?;
     for (((page_number, page_id), bitmap), dims) in document
         .get_pages()
         .into_iter()
@@ -255,6 +357,7 @@ fn flatten_pages_impl(
         &after,
         &original_rendered,
         &rerendered,
+        expected_foreground_text.as_deref(),
         &mut page_reports,
     )?;
     if !validation.passed {
@@ -381,7 +484,8 @@ fn replace_page(
     let mut foreground_xobject_names = HashSet::new();
     if preserve_text {
         let original = Content::decode(&doc.get_page_content_with_limit(page_id, usize::MAX)?)?;
-        let (_, foreground) = split_at_top_raster(doc, page_id, &original, page_number)?;
+        let foreground =
+            split_at_flatten_boundary(doc, page_id, &original, page_number)?.foreground;
         foreground_xobject_names.extend(
             foreground
                 .operations
@@ -418,26 +522,29 @@ fn replace_page(
     Ok(())
 }
 
-fn split_at_top_raster(
+struct FlattenSplit {
+    background: Content,
+    foreground: Content,
+    operation_index: usize,
+    reason: String,
+    foreground_text_operations: usize,
+}
+
+fn split_at_flatten_boundary(
     document: &Document,
     page_id: lopdf::ObjectId,
     content: &Content,
     page_number: u32,
-) -> Result<(Content, Content), FlattenError> {
-    let raster_names = page_raster_names(document, page_id)?;
-    let last_raster = content
+) -> Result<FlattenSplit, FlattenError> {
+    let artwork_names = page_artwork_names(document, page_id)?;
+    let last_artwork = content
         .operations
         .iter()
-        .rposition(|operation| {
-            operation.operator == "Do"
-                && operation
-                    .operands
-                    .first()
-                    .and_then(|value| value.as_name().ok())
-                    .is_some_and(|name| raster_names.contains(name))
-        })
+        .rposition(|operation| is_artwork_paint_operation(operation, &artwork_names))
         .ok_or_else(|| {
-            FlattenError::Validation(format!("page {page_number} has no raster layer boundary"))
+            FlattenError::HybridUnavailable(format!(
+                "page {page_number} has no artwork flatten boundary"
+            ))
         })?;
     let mut depth = 0_i32;
     let mut in_text = false;
@@ -457,27 +564,157 @@ fn split_at_top_raster(
             "ET" => in_text = false,
             _ => {}
         }
-        if index >= last_raster && depth == 0 && !in_text {
+        if index >= last_artwork && depth == 0 && !in_text {
             boundary = Some(index + 1);
             break;
         }
     }
     let boundary = boundary.ok_or_else(|| {
-        FlattenError::Validation(format!(
+        FlattenError::HybridUnavailable(format!(
             "page {page_number} has no safe boundary after its top raster layer"
         ))
     })?;
-    Ok((
-        Content {
+    let foreground = Content {
+        operations: content.operations[boundary..].to_vec(),
+    };
+    let page_resources = page_resources(document, page_id)?;
+    let foreground_text_operations =
+        count_text_paint_operations(document, page_resources, &foreground, &mut HashSet::new());
+    Ok(FlattenSplit {
+        background: Content {
             operations: content.operations[..boundary].to_vec(),
         },
-        Content {
-            operations: content.operations[boundary..].to_vec(),
-        },
-    ))
+        foreground,
+        operation_index: boundary,
+        reason: format!(
+            "after the final non-text artwork paint operation ({last_artwork}); advanced to operation {boundary} to close text and graphics-state scopes"
+        ),
+        foreground_text_operations,
+    })
 }
 
-fn page_raster_names(
+fn extract_foreground_text(document: &Document) -> Result<Vec<String>, FlattenError> {
+    let mut foreground = document.clone();
+    for (page_number, page_id) in foreground.get_pages() {
+        let bytes = foreground.get_page_content_with_limit(page_id, usize::MAX)?;
+        let content = Content::decode(&bytes)?;
+        let suffix =
+            split_at_flatten_boundary(&foreground, page_id, &content, page_number)?.foreground;
+        foreground.change_page_content(page_id, suffix.encode()?)?;
+    }
+    Ok(foreground
+        .get_pages()
+        .keys()
+        .map(|page_number| foreground.extract_text(&[*page_number]).unwrap_or_default())
+        .collect())
+}
+
+fn page_resources(
+    document: &Document,
+    page_id: lopdf::ObjectId,
+) -> Result<&lopdf::Dictionary, FlattenError> {
+    let page = document.get_dictionary(page_id)?;
+    match page.get(b"Resources")? {
+        Object::Dictionary(resources) => Ok(resources),
+        Object::Reference(id) => Ok(document.get_dictionary(*id)?),
+        _ => Err(FlattenError::Validation(
+            "unsupported page resources".into(),
+        )),
+    }
+}
+
+fn count_text_paint_operations(
+    document: &Document,
+    resources: &lopdf::Dictionary,
+    content: &Content,
+    active_forms: &mut HashSet<lopdf::ObjectId>,
+) -> usize {
+    let mut count = content
+        .operations
+        .iter()
+        .filter(|operation| matches!(operation.operator.as_str(), "Tj" | "TJ" | "'" | "\""))
+        .count();
+    let xobjects = match resources.get(b"XObject") {
+        Ok(Object::Dictionary(value)) => value,
+        Ok(Object::Reference(id)) => match document.get_dictionary(*id) {
+            Ok(value) => value,
+            Err(_) => return count,
+        },
+        _ => return count,
+    };
+    for operation in content
+        .operations
+        .iter()
+        .filter(|operation| operation.operator == "Do")
+    {
+        let Some(name) = operation
+            .operands
+            .first()
+            .and_then(|value| value.as_name().ok())
+        else {
+            continue;
+        };
+        let Some(id) = xobjects
+            .get(name)
+            .ok()
+            .and_then(|value| value.as_reference().ok())
+        else {
+            continue;
+        };
+        if !active_forms.insert(id) {
+            continue;
+        }
+        let Some(stream) = document
+            .get_object(id)
+            .ok()
+            .and_then(|value| value.as_stream().ok())
+        else {
+            active_forms.remove(&id);
+            continue;
+        };
+        if stream
+            .dict
+            .get(b"Subtype")
+            .ok()
+            .and_then(|value| value.as_name().ok())
+            != Some(b"Form")
+        {
+            active_forms.remove(&id);
+            continue;
+        }
+        let form_content = stream
+            .decompressed_content()
+            .or_else(|_| Ok::<_, lopdf::Error>(stream.content.clone()))
+            .and_then(|bytes| Content::decode(&bytes));
+        if let Ok(form_content) = form_content {
+            let form_resources = match stream.dict.get(b"Resources") {
+                Ok(Object::Dictionary(value)) => value,
+                Ok(Object::Reference(resource_id)) => {
+                    document.get_dictionary(*resource_id).unwrap_or(resources)
+                }
+                _ => resources,
+            };
+            count +=
+                count_text_paint_operations(document, form_resources, &form_content, active_forms);
+        }
+        active_forms.remove(&id);
+    }
+    count
+}
+
+fn is_artwork_paint_operation(operation: &Operation, artwork_names: &HashSet<Vec<u8>>) -> bool {
+    match operation.operator.as_str() {
+        "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "sh" | "BI" => true,
+        "Do" => operation
+            .operands
+            .first()
+            .and_then(|value| value.as_name().ok())
+            .is_some_and(|name| artwork_names.contains(name)),
+        _ => false,
+    }
+}
+
+fn page_artwork_names(
     document: &Document,
     page_id: lopdf::ObjectId,
 ) -> Result<HashSet<Vec<u8>>, FlattenError> {
@@ -500,12 +737,12 @@ fn page_raster_names(
         .iter()
         .filter_map(|(name, value)| {
             let id = value.as_reference().ok()?;
-            xobject_contains_raster(document, id, &mut HashSet::new()).then(|| name.clone())
+            xobject_contains_artwork(document, id, &mut HashSet::new()).then(|| name.clone())
         })
         .collect())
 }
 
-fn xobject_contains_raster(
+fn xobject_contains_artwork(
     document: &Document,
     id: lopdf::ObjectId,
     visited: &mut HashSet<lopdf::ObjectId>,
@@ -524,6 +761,9 @@ fn xobject_contains_raster(
     {
         Some(b"Image") => true,
         Some(b"Form") => {
+            if stream.dict.has(b"Group") {
+                return true;
+            }
             let Ok(content) = stream
                 .decompressed_content()
                 .or_else(|_| Ok::<_, lopdf::Error>(stream.content.clone()))
@@ -547,27 +787,36 @@ fn xobject_contains_raster(
                 },
                 _ => return false,
             };
-            content
-                .operations
+            let artwork_names = xobjects
                 .iter()
-                .filter(|operation| operation.operator == "Do")
-                .any(|operation| {
-                    let Some(name) = operation
-                        .operands
-                        .first()
-                        .and_then(|value| value.as_name().ok())
-                    else {
-                        return false;
-                    };
-                    let Some(child) = xobjects
-                        .get(name)
-                        .ok()
-                        .and_then(|value| value.as_reference().ok())
-                    else {
-                        return false;
-                    };
-                    xobject_contains_raster(document, child, visited)
+                .filter_map(|(name, value)| {
+                    let child = value.as_reference().ok()?;
+                    xobject_contains_artwork(document, child, visited).then(|| name.clone())
                 })
+                .collect::<HashSet<_>>();
+            content.operations.iter().any(|operation| {
+                if is_artwork_paint_operation(operation, &artwork_names) {
+                    return true;
+                }
+                if operation.operator != "Do" {
+                    return false;
+                }
+                let Some(name) = operation
+                    .operands
+                    .first()
+                    .and_then(|value| value.as_name().ok())
+                else {
+                    return false;
+                };
+                let Some(child) = xobjects
+                    .get(name)
+                    .ok()
+                    .and_then(|value| value.as_reference().ok())
+                else {
+                    return false;
+                };
+                xobject_contains_artwork(document, child, visited)
+            })
         }
         _ => false,
     }
@@ -580,12 +829,14 @@ fn validate(
     after: &crate::model::AnalysisResult,
     rendered: &[RenderedPage],
     rerendered: &[RenderedPage],
+    expected_foreground_text: Option<&[String]>,
     reports: &mut [FlattenPageReport],
 ) -> Result<FlattenValidation, FlattenError> {
     let page_count = before.pages.len() == after.pages.len();
     let mut boxes = true;
     let mut rotations = true;
     let mut annotations = true;
+    let navigation = catalog_references_preserved(original, output);
     for ((_, a), (_, b)) in original.get_pages().into_iter().zip(output.get_pages()) {
         let ad = original.get_dictionary(a)?;
         let bd = output.get_dictionary(b)?;
@@ -613,7 +864,7 @@ fn validate(
         .all(|p| p.object_counts.image_placements == 1);
     let mut render_ok = true;
     let mut maximum = 0.0_f64;
-    for ((a, b), report) in rendered.iter().zip(rerendered).zip(reports) {
+    for ((a, b), report) in rendered.iter().zip(rerendered).zip(reports.iter_mut()) {
         if a.width != b.width || a.height != b.height {
             return Err(FlattenError::Validation(
                 "rendered dimensions changed".into(),
@@ -627,21 +878,69 @@ fn validate(
             .sum::<f64>()
             / a.rgb.len() as f64;
         report.mean_render_error = Some(mean);
+        report.visual_validation_passed = Some(mean <= 12.0);
         maximum = maximum.max(mean);
         if mean > 12.0 {
             render_ok = false
         }
     }
+    for (output_page, report) in after.pages.iter().zip(reports.iter_mut()) {
+        report.native_text_operations_retained = output_page.object_counts.text_operations;
+        if report.native_text_operations_retained != report.text_operations_above_boundary {
+            render_ok = false;
+            report.visual_validation_passed = Some(false);
+        }
+    }
+    let mut foreground_text_ok = true;
+    if let Some(expected) = expected_foreground_text {
+        for ((page_number, expected_text), report) in output
+            .get_pages()
+            .keys()
+            .zip(expected)
+            .zip(reports.iter_mut())
+        {
+            let actual = output.extract_text(&[*page_number]).unwrap_or_default();
+            let retained =
+                normalize_extracted_text(&actual) == normalize_extracted_text(expected_text);
+            report.searchable_foreground_text_retained = Some(retained);
+            foreground_text_ok &= retained;
+        }
+    }
     Ok(FlattenValidation {
-        passed: page_count && boxes && rotations && annotations && one_image && render_ok,
+        passed: page_count
+            && boxes
+            && rotations
+            && annotations
+            && one_image
+            && render_ok
+            && foreground_text_ok
+            && navigation,
         page_count_preserved: page_count,
         page_boxes_preserved: boxes,
         page_rotation_preserved: rotations,
         annotations_preserved: annotations,
         exactly_one_page_image: one_image,
         render_comparison_passed: render_ok,
+        foreground_text_extraction_preserved: foreground_text_ok,
+        document_navigation_preserved: navigation,
         maximum_mean_render_error: maximum,
     })
+}
+
+fn catalog_references_preserved(original: &Document, output: &Document) -> bool {
+    let Ok(before) = original.catalog() else {
+        return false;
+    };
+    let Ok(after) = output.catalog() else {
+        return false;
+    };
+    [b"Outlines".as_slice(), b"Names", b"Dests", b"PageLabels"]
+        .iter()
+        .all(|key| format!("{:?}", before.get(key).ok()) == format!("{:?}", after.get(key).ok()))
+}
+
+fn normalize_extracted_text(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[allow(clippy::too_many_arguments)] // Report assembly mirrors the public schema fields.
@@ -680,7 +979,9 @@ fn base_report(
         output_sha256: output_hash,
         validation,
         destructive_changes: if preserve_text {
-            vec!["Raster images and vector artwork are flattened into a page background.".into()]
+            vec![
+                "Raster images, vector artwork, and text below the paint-order boundary are flattened into a page artwork layer.".into(),
+            ]
         } else {
             vec![
                 "Text is rasterised and is no longer selectable/searchable.".into(),
@@ -691,7 +992,7 @@ fn base_report(
         preserved: vec![
             "Page boxes, dimensions, aspect ratios, page count, and rotation.".into(),
             if preserve_text {
-                "Original text operators and font resources remain selectable/searchable.".into()
+                "Original foreground text operators and required font resources above the paint-order boundary remain selectable/searchable.".into()
             } else {
                 "Annotation and link dictionaries; annotation appearances are not baked into page bitmaps.".into()
             },
@@ -731,6 +1032,41 @@ fn number(o: &Object) -> Option<f64> {
         Object::Integer(v) => Some(*v as f64),
         Object::Real(v) => Some(*v as f64),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+
+    #[test]
+    fn boundary_keeps_only_text_after_final_artwork_paint() {
+        let mut document = Document::with_version("1.7");
+        let image = document.add_object(Stream::new(
+            dictionary! {"Type"=>"XObject", "Subtype"=>"Image", "Width"=>1, "Height"=>1},
+            vec![0],
+        ));
+        let page_id = document.add_object(dictionary! {
+            "Type"=>"Page",
+            "Resources"=>dictionary!{"XObject"=>dictionary!{"Im0"=>image}},
+        });
+        let content = Content {
+            operations: vec![
+                Operation::new("Do", vec![Object::Name(b"Im0".to_vec())]),
+                Operation::new("BT", vec![]),
+                Operation::new("Tj", vec![Object::string_literal("below")]),
+                Operation::new("ET", vec![]),
+                Operation::new("re", vec![0.into(), 0.into(), 10.into(), 10.into()]),
+                Operation::new("f", vec![]),
+                Operation::new("BT", vec![]),
+                Operation::new("Tj", vec![Object::string_literal("above")]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let split = split_at_flatten_boundary(&document, page_id, &content, 1).unwrap();
+        assert_eq!(split.operation_index, 6);
+        assert_eq!(split.foreground_text_operations, 1);
+        assert_eq!(split.foreground.operations[1].operator, "Tj");
     }
 }
 pub fn human_summary(r: &FlattenReport) -> String {

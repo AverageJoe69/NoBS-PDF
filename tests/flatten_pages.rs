@@ -176,3 +176,29 @@ fn test_validation_failure_blocks_output() {
     assert!(error.to_string().contains("larger than the source"));
     assert!(!output.exists());
 }
+
+#[test]
+fn desktop_scale_path_uses_foreground_text_hybrid_when_safe() {
+    let library = pdfium_library();
+    if !library.exists() {
+        return;
+    }
+    let dir = TempDir::new().unwrap();
+    let input = dir.path().join("in.pdf");
+    let output = dir.path().join("out.pdf");
+    fixture(&input);
+    let result = pdfdoctor::app::optimise_pdf_scale_with_options(
+        &input,
+        100,
+        &output,
+        &pdfdoctor::app::CancellationToken::default(),
+        |_| {},
+    )
+    .unwrap();
+    assert_eq!(result.mode, "scale_100");
+    assert_eq!(result.scale_percent, Some(100));
+    assert!(result.validation_passed);
+    assert!(result.text_preserved);
+    assert!(!result.vectors_preserved);
+    assert!(output.exists());
+}

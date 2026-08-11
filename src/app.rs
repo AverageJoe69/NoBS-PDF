@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     exporter::{export_for_scale, export_for_target, ExportOptions, ExportReport},
-    flatten_pages::{flatten_pages, flatten_pages_preserve_text, FlattenReport},
+    flatten_pages::{
+        flatten_pages, flatten_pages_preserve_foreground_text_for_scale,
+        flatten_pages_preserve_text, FlattenError, FlattenReport,
+    },
     inspect,
     resolution::{detect_document_resolution, DocumentResolution, PageRasterBudget},
 };
@@ -305,6 +308,31 @@ pub fn optimise_pdf_scale_with_options(
             AppErrorCode::OutputExists,
             "The selected output file already exists.",
         ));
+    }
+    let inspection = inspect(path).map_err(map_inspection_error)?;
+    let resolution = detect_document_resolution(&inspection);
+    progress("optimising");
+    match flatten_pages_preserve_foreground_text_for_scale(path, output, false, None, scale_percent)
+    {
+        Ok(report) => {
+            if cancellation.is_cancelled() {
+                let _ = fs::remove_file(output);
+                return Err(simple_error(
+                    AppErrorCode::Cancelled,
+                    "Optimisation was cancelled.",
+                ));
+            }
+            let mut result = result_from_flatten_report(report)?;
+            result.mode = format!("scale_{scale_percent}");
+            result.scale_percent = Some(scale_percent);
+            result.page_budgets = resolution.pages;
+            return Ok(result);
+        }
+        Err(FlattenError::HybridUnavailable(_)) => {
+            // Vector-only or structurally inseparable pages retain the existing
+            // conservative native-resource path.
+        }
+        Err(error) => return Err(map_flatten_error(error)),
     }
     let report = export_for_scale(
         path,
