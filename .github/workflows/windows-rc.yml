@@ -90,6 +90,11 @@ jobs:
           $application = Get-ChildItem $installRoot -Filter "*.exe" -Recurse | Where-Object Name -NotLike "uninstall*" | Select-Object -First 1
           if (-not $application) { throw "Installed application executable was not found" }
           if (-not (Test-Path (Join-Path $application.DirectoryName "pdfium.dll"))) { throw "Installed application is missing pdfium.dll" }
+          $bytes = [System.IO.File]::ReadAllBytes($application.FullName)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 24 + 68)
+          if ($subsystem -ne 2) { throw "Installed application is not a Windows GUI executable (PE subsystem $subsystem)" }
+          Write-Host "Installed application PE subsystem: Windows GUI"
           $app = Start-Process $application.FullName -PassThru
           Start-Sleep -Seconds 8
           if ($app.HasExited) { throw "Installed application exited unexpectedly with code $($app.ExitCode)" }
