@@ -10,6 +10,64 @@ use licensing::LicenceStatus;
 
 struct OptimisationState(Mutex<CancellationToken>);
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateStatus {
+    current_version: String,
+    latest_version: String,
+    update_available: bool,
+    download_page: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicReleaseConfig {
+    release_version: String,
+}
+
+#[tauri::command]
+async fn check_for_updates() -> Result<UpdateStatus, AppError> {
+    let base = option_env!("NOBS_LICENSE_API_URL").unwrap_or("https://nobs-pdf.com");
+    let response = reqwest::Client::new()
+        .get(format!("{}/api/config", base.trim_end_matches('/')))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(update_error)?;
+    if !response.status().is_success() {
+        return Err(update_error(format!("HTTP {}", response.status())));
+    }
+    let release = response
+        .json::<PublicReleaseConfig>()
+        .await
+        .map_err(update_error)?;
+    let current = env!("CARGO_PKG_VERSION");
+    Ok(UpdateStatus {
+        current_version: current.into(),
+        update_available: version_tuple(&release.release_version) > version_tuple(current),
+        latest_version: release.release_version,
+        download_page: base.into(),
+    })
+}
+
+fn version_tuple(version: &str) -> (u64, u64, u64) {
+    let mut parts = version.split('.').map(|part| part.parse().unwrap_or(0));
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    )
+}
+
+fn update_error(error: impl std::fmt::Display) -> AppError {
+    AppError {
+        code: app::AppErrorCode::OptimisationFailed,
+        message: "NoBS PDF could not check for updates. Check your connection and try again."
+            .into(),
+        detail: cfg!(debug_assertions).then(|| error.to_string()),
+    }
+}
+
 #[tauri::command]
 async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
     require_licence()?;
@@ -141,7 +199,8 @@ pub fn run() {
             get_licence_status,
             activate_licence,
             revalidate_licence,
-            deactivate_licence
+            deactivate_licence,
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("error while running NoBS PDF");
@@ -194,5 +253,12 @@ mod licensing_boundary_tests {
         let expected = directory.path().join(filename);
         fs::write(&expected, b"test library").unwrap();
         assert_eq!(super::pdfium_path_in(directory.path()).unwrap(), expected);
+    }
+
+    #[test]
+    fn update_versions_are_compared_numerically() {
+        assert!(super::version_tuple("1.1.0") > super::version_tuple("1.0.9"));
+        assert!(super::version_tuple("2.0.0") > super::version_tuple("1.99.99"));
+        assert_eq!(super::version_tuple("1.0.0"), (1, 0, 0));
     }
 }

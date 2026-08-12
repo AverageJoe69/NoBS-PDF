@@ -178,6 +178,15 @@ test("Checkout Session uses the configured annual subscription Price", async (t)
   assert.match(calls[0].success_url, /session_id=\{CHECKOUT_SESSION_ID\}$/);
 });
 
+test("public configuration exposes the current release version for manual update checks", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const response = await request(app).get("/api/config");
+  assert.equal(response.status, 200);
+  assert.equal(response.type, "application/json");
+  assert.equal(response.body.releaseVersion, "1.0.0");
+  assert.deepEqual(response.body.releases, config.releases);
+});
+
 test("Checkout is unavailable when no platform has been released", async (t) => {
   const unavailable = { ...config, releases: { macOS: false, Windows: false }, downloads: { macOS: "", Windows: "" } };
   const { app, store, calls } = harness(paidSession(), unavailable); t.after(() => store.close());

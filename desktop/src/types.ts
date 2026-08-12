@@ -84,3 +84,10 @@ export type LicenceStatus = {
   deviceName: string;
   locallyActivated: boolean;
 };
+
+export type UpdateStatus = {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  downloadPage: string;
+};
