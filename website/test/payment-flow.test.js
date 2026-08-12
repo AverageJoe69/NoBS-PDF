@@ -94,6 +94,7 @@ test("configuration safety rules remain enforced", () => {
 
 test("perpetual Price validation requires the exact active GBP 9.99 inclusive one-time Product", () => {
   assert.equal(isPerpetualNoBsPrice(perpetualPrice(), config.stripePriceId), true);
+  assert.equal(isPerpetualNoBsPrice(perpetualPrice({ product: { id: "prod_nobs_11", name: "NoBS PDF 1.1", active: true } }), config.stripePriceId), true);
   for (const price of [
     perpetualPrice({ id: "price_wrong" }), perpetualPrice({ active: false }),
     perpetualPrice({ currency: "usd" }), perpetualPrice({ unit_amount: 2500 }),

@@ -61,9 +61,10 @@ function checkoutPrice(lineItems) {
 
 export function isPerpetualNoBsPrice(price, configuredId) {
   const product = typeof price?.product === "object" ? price.product : null;
+  const expectedProductName = /^NoBS PDF(?:\s+\d+(?:\.\d+)*)?$/;
   return price?.id === configuredId && price.active === true && price.currency === "gbp" && price.unit_amount === 999
     && price.type === "one_time" && price.recurring == null && price.tax_behavior === "inclusive"
-    && product && !product.deleted && product.active !== false && product.name === "NoBS PDF";
+    && product && !product.deleted && product.active !== false && expectedProductName.test(product.name);
 }
 
 function activationRateLimit({ windowMs = 60_000, maximum = 10 } = {}) {
