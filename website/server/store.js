@@ -10,8 +10,7 @@ const nowIso = () => new Date().toISOString();
 function entitlement(row, now = Date.now()) {
   if (!row) return "INVALID";
   if (row.licence_status === "revoked") return "REVOKED";
-  const paidThrough = Date.parse(row.current_period_end || "");
-  return Number.isFinite(paidThrough) && paidThrough > now ? "ACTIVE" : "EXPIRED";
+  return row.payment_status === "paid" ? "ACTIVE" : "INVALID";
 }
 
 export function createStore(filename) {
@@ -53,8 +52,13 @@ export function createStore(filename) {
     ["subscription_status", "TEXT NOT NULL DEFAULT 'incomplete'"],
     ["current_period_end", "TEXT"],
     ["cancel_at_period_end", "INTEGER NOT NULL DEFAULT 0"],
+    ["entitlement_type", "TEXT NOT NULL DEFAULT 'perpetual'"],
   ];
   for (const [name, type] of additions) if (!columns.has(name)) db.exec(`ALTER TABLE purchases ADD COLUMN ${name} ${type}`);
+  // Existing paid, non-revoked subscription-era purchases become perpetual.
+  // Subscription columns are retained as migration evidence and for support reconciliation.
+  db.prepare(`UPDATE purchases SET entitlement_type='perpetual'
+    WHERE payment_status='paid' AND licence_status!='revoked' AND entitlement_type!='perpetual'`).run();
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS purchases_subscription_idx ON purchases(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
     CREATE TABLE IF NOT EXISTS activations (
@@ -73,12 +77,14 @@ export function createStore(filename) {
   `);
 
   const findBySession = db.prepare("SELECT * FROM purchases WHERE stripe_checkout_session_id = ?");
+  const findByPaymentIntent = db.prepare("SELECT * FROM purchases WHERE stripe_payment_intent_id = ?");
   const findBySubscription = db.prepare("SELECT * FROM purchases WHERE stripe_subscription_id = ?");
   const eventSeen = db.prepare("SELECT 1 FROM processed_events WHERE stripe_event_id = ?");
   const insertEvent = db.prepare("INSERT INTO processed_events VALUES (?, ?, ?)");
-  const recordSubscription = db.transaction((event, subscription) => {
-    if (eventSeen.get(event.id)) return { duplicate: true, purchase: findBySubscription.get(subscription.subscriptionId) ?? null };
-    const existing = findBySubscription.get(subscription.subscriptionId) || findBySession.get(subscription.checkoutSessionId);
+  const recordPurchase = db.transaction((event, purchase) => {
+    if (eventSeen.get(event.id)) return { duplicate: true, purchase: findBySession.get(purchase.checkoutSessionId) ?? null };
+    const existing = findBySession.get(purchase.checkoutSessionId)
+      || (purchase.paymentIntentId ? findByPaymentIntent.get(purchase.paymentIntentId) : null);
     insertEvent.run(event.id, event.type, nowIso());
     if (existing) return { duplicate: true, purchase: existing };
     const now = nowIso();
@@ -88,15 +94,13 @@ export function createStore(filename) {
           licence_key, customer_email, stripe_customer_id, stripe_checkout_session_id,
           stripe_payment_intent_id, stripe_product_id, stripe_price_id, purchase_timestamp,
           release_version, activation_status, activation_count, payment_status, licence_status,
-          stripe_subscription_id, subscription_status, current_period_end, cancel_at_period_end,
+          entitlement_type, stripe_subscription_id, subscription_status, current_period_end, cancel_at_period_end,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', 0, 'paid', 'active', ?, ?, ?, ?, ?, ?)`)
-          .run(generateLicenceKey(), subscription.customerEmail, subscription.stripeCustomerId,
-            subscription.checkoutSessionId, subscription.paymentIntentId, subscription.productId,
-            subscription.priceId, subscription.purchaseTimestamp, subscription.releaseVersion,
-            subscription.subscriptionId, subscription.subscriptionStatus, subscription.currentPeriodEnd,
-            subscription.cancelAtPeriodEnd ? 1 : 0, now, now);
-        return { duplicate: false, purchase: findBySubscription.get(subscription.subscriptionId) };
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', 0, 'paid', 'active', 'perpetual', NULL, 'not_applicable', NULL, 0, ?, ?)`)
+          .run(generateLicenceKey(), purchase.customerEmail, purchase.stripeCustomerId,
+            purchase.checkoutSessionId, purchase.paymentIntentId, purchase.productId,
+            purchase.priceId, purchase.purchaseTimestamp, purchase.releaseVersion, now, now);
+        return { duplicate: false, purchase: findBySession.get(purchase.checkoutSessionId) };
       } catch (error) {
         if (!String(error.message).includes("licence_key")) throw error;
       }
@@ -104,23 +108,26 @@ export function createStore(filename) {
     throw new Error("Unable to allocate a unique licence key.");
   });
 
-  const updateSubscription = db.transaction((event, subscription) => {
+  const recordRefund = db.transaction((event, { paymentIntentId, checkoutSessionId, subscriptionId, fullyRefunded }) => {
     if (eventSeen.get(event.id)) return { duplicate: true, updated: false };
     insertEvent.run(event.id, event.type, nowIso());
-    const result = db.prepare(`UPDATE purchases SET subscription_status = ?, current_period_end = CASE WHEN ? = 'failed' THEN current_period_end ELSE ? END,
-      cancel_at_period_end = ?, payment_status = ?, licence_status = CASE WHEN ? = 'refunded' THEN 'revoked' ELSE licence_status END,
-      revoked_at = CASE WHEN ? = 'refunded' THEN ? ELSE revoked_at END, updated_at = ? WHERE stripe_subscription_id = ?`)
-      .run(subscription.subscriptionStatus, subscription.paymentStatus || "paid", subscription.currentPeriodEnd,
-        subscription.cancelAtPeriodEnd ? 1 : 0, subscription.paymentStatus || "paid",
-        subscription.paymentStatus || "paid", subscription.paymentStatus || "paid", nowIso(), nowIso(), subscription.subscriptionId);
+    if (!fullyRefunded) return { duplicate: false, updated: false };
+    const purchase = (paymentIntentId ? findByPaymentIntent.get(paymentIntentId) : null)
+      || (checkoutSessionId ? findBySession.get(checkoutSessionId) : null)
+      || (subscriptionId ? findBySubscription.get(subscriptionId) : null);
+    if (!purchase) return { duplicate: false, updated: false };
+    const timestamp = nowIso();
+    const result = db.prepare(`UPDATE purchases SET payment_status='refunded', licence_status='revoked',
+      revoked_at=COALESCE(revoked_at, ?), updated_at=? WHERE id=?`)
+      .run(timestamp, timestamp, purchase.id);
     return { duplicate: false, updated: result.changes > 0 };
   });
 
   const hash = value => createHash("sha256").update(value).digest("hex");
   const activeCount = db.prepare("SELECT COUNT(*) count FROM activations WHERE purchase_id = ? AND deactivated_at IS NULL");
   const findLicence = db.prepare("SELECT * FROM purchases WHERE licence_key = ?");
-  const findActivation = db.prepare(`SELECT a.*, p.licence_key, p.licence_status, p.release_version,
-    p.subscription_status, p.current_period_end, p.cancel_at_period_end
+  const findActivation = db.prepare(`SELECT a.*, p.licence_key, p.licence_status, p.payment_status,
+    p.release_version, p.entitlement_type
     FROM activations a JOIN purchases p ON p.id = a.purchase_id WHERE a.activation_id = ?`);
 
   const activate = db.transaction(({ licenceKey, deviceIdentifier, appVersion, platform, limit, now = Date.now() }) => {
@@ -140,7 +147,7 @@ export function createStore(filename) {
     else db.prepare(`INSERT INTO activations (activation_id,purchase_id,device_identifier_hash,activation_token_hash,app_version,platform,activated_at,last_seen_at) VALUES (?,?,?,?,?,?,?,?)`).run(activationId, purchase.id, deviceHash, tokenHash, appVersion, platform, timestamp, timestamp);
     const nextCount = activeCount.get(purchase.id).count;
     db.prepare("UPDATE purchases SET activation_status=?, activation_count=?, updated_at=? WHERE id=?").run(nextCount ? "active" : "inactive", nextCount, timestamp, purchase.id);
-    return { state: "ACTIVE", activationId, activationToken: token, releaseVersion: purchase.release_version, platform, activeDevices: nextCount, limit, paidThrough: purchase.current_period_end, cancelAtPeriodEnd: Boolean(purchase.cancel_at_period_end) };
+    return { state: "ACTIVE", activationId, activationToken: token, releaseVersion: purchase.release_version, platform, activeDevices: nextCount, limit };
   });
 
   function authenticatedActivation(activationId, token) {
@@ -153,9 +160,10 @@ export function createStore(filename) {
 
   return {
     healthCheck() { db.prepare("SELECT 1").get(); },
-    recordSubscription,
-    updateSubscription,
+    recordPurchase,
+    recordRefund,
     findPurchaseBySession(sessionId) { return findBySession.get(sessionId) ?? null; },
+    findPurchaseByPaymentIntent(paymentIntentId) { return findByPaymentIntent.get(paymentIntentId) ?? null; },
     findPurchaseBySubscription(subscriptionId) { return findBySubscription.get(subscriptionId) ?? null; },
     findDownloadEntitlement(sessionId, releaseVersion) {
       const row = db.prepare("SELECT * FROM purchases WHERE stripe_checkout_session_id=? AND release_version=?").get(sessionId, releaseVersion);
@@ -168,7 +176,7 @@ export function createStore(filename) {
       const state = entitlement(activation, now);
       if (state !== "ACTIVE") return { state };
       db.prepare("UPDATE activations SET last_seen_at=? WHERE activation_id=?").run(nowIso(), activationId);
-      return { state: "ACTIVE", activationId, releaseVersion: activation.release_version, platform: activation.platform, paidThrough: activation.current_period_end, cancelAtPeriodEnd: Boolean(activation.cancel_at_period_end) };
+      return { state: "ACTIVE", activationId, releaseVersion: activation.release_version, platform: activation.platform };
     },
     deactivateActivation(activationId, token) {
       const activation = authenticatedActivation(activationId, token);
@@ -179,9 +187,9 @@ export function createStore(filename) {
       db.prepare("UPDATE purchases SET activation_status=?, activation_count=?, updated_at=? WHERE id=?").run(count ? "active" : "inactive", count, now, activation.purchase_id);
       return { state: "NOT_ACTIVATED" };
     },
-    setLicenceState(licenceKey, { licenceStatus = "active", currentPeriodEnd, subscriptionStatus = "active" } = {}) {
-      db.prepare("UPDATE purchases SET licence_status=?, revoked_at=?, current_period_end=COALESCE(?,current_period_end), subscription_status=? WHERE licence_key=?")
-        .run(licenceStatus, licenceStatus === "revoked" ? nowIso() : null, currentPeriodEnd ?? null, subscriptionStatus, normalizeLicenceKey(licenceKey));
+    setLicenceState(licenceKey, { licenceStatus = "active", paymentStatus = "paid" } = {}) {
+      db.prepare("UPDATE purchases SET licence_status=?, payment_status=?, revoked_at=? WHERE licence_key=?")
+        .run(licenceStatus, paymentStatus, licenceStatus === "revoked" ? nowIso() : null, normalizeLicenceKey(licenceKey));
     },
     activeActivationCount(licenceKey) { const row = findLicence.get(normalizeLicenceKey(licenceKey)); return row ? activeCount.get(row.id).count : 0; },
     processedEventCount(eventId) { return db.prepare("SELECT COUNT(*) count FROM processed_events WHERE stripe_event_id=?").get(eventId).count; },
