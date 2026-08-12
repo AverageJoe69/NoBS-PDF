@@ -21,3 +21,6 @@ tauri-plugin-opener = "2"
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "system-proxy"] }
 uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3.14"

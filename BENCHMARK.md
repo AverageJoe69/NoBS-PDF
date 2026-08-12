@@ -34,4 +34,4 @@ Byte-for-byte output identity is not required. PDF object serialization and nati
 
 ## Metric boundaries
 
-Counts in the JSON report are inspector measurements. `images_downsampled` is `null` because selective compositing cannot truthfully attribute the resulting pixels to independently downsampled source objects. Text and vector operation counts before and after are reported separately; the frozen policy intentionally composites artwork behind the top raster boundary while retaining foreground text/vector operators.
+Counts in the JSON report are inspector measurements. `images_downsampled` is `null` because selective compositing cannot truthfully attribute the resulting pixels to independently downsampled source objects. The foreground-text policy bakes the page through the final non-text artwork paint operation, then retains the untouched trailing text suffix. Text below or interleaved with later artwork is intentionally rasterised. The report records source, below-boundary, above-boundary, retained-native, and searchable-foreground results per page.

@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     exporter::{export_for_scale, export_for_target, ExportOptions, ExportReport},
-    flatten_pages::{flatten_pages, flatten_pages_preserve_text, FlattenReport},
+    flatten_pages::{
+        flatten_pages, flatten_pages_preserve_foreground_text_for_scale,
+        flatten_pages_preserve_text, FlattenError, FlattenReport,
+    },
     inspect,
     resolution::{detect_document_resolution, DocumentResolution, PageRasterBudget},
 };
@@ -204,7 +207,51 @@ pub fn estimate_pdf_scale(
     scale_percent: u8,
 ) -> Result<OptimisationEstimate, AppError> {
     validate_pdf_path(path)?;
+    let inspection = inspect(path).map_err(map_inspection_error)?;
+    let resolution = detect_document_resolution(&inspection);
     let placeholder = default_output_path(path, &format!("{scale_percent}pct"));
+    match flatten_pages_preserve_foreground_text_for_scale(
+        path,
+        &placeholder,
+        true,
+        None,
+        scale_percent,
+    ) {
+        Ok(hybrid) => {
+            // Quality-90 page artwork averages about 0.38 encoded bytes per
+            // raster pixel across the golden deck. Add a small allowance for
+            // retained foreground fonts/content and PDF structure.
+            let raster_pixels = hybrid.pages.iter().fold(0_u64, |total, page| {
+                total.saturating_add(
+                    u64::from(page.raster_artwork_dimensions[0])
+                        * u64::from(page.raster_artwork_dimensions[1]),
+                )
+            });
+            let estimated_output = raster_pixels
+                .saturating_mul(38)
+                .saturating_div(100)
+                .saturating_add(65_536)
+                .min(inspection.file.size_bytes);
+            let saving = inspection.file.size_bytes.saturating_sub(estimated_output);
+            return Ok(OptimisationEstimate {
+                original_size_bytes: inspection.file.size_bytes,
+                estimated_output_size_bytes: Some(estimated_output),
+                estimated_saving_bytes: Some(saving),
+                estimated_saving_percent: Some(
+                    saving as f64 * 100.0 / inspection.file.size_bytes as f64,
+                ),
+                candidate_images: hybrid.pages.len(),
+                skipped_images: 0,
+                profile: format!("scale_{scale_percent}"),
+                document_long_dimension_px: None,
+                bloated_images: vec![],
+                scale_percent: Some(scale_percent),
+                page_budgets: resolution.pages,
+            });
+        }
+        Err(FlattenError::HybridUnavailable(_)) => {}
+        Err(error) => return Err(map_flatten_error(error)),
+    }
     let report = export_for_scale(
         path,
         &placeholder,
@@ -275,6 +322,17 @@ pub fn optimise_pdf_scale_with_options(
     scale_percent: u8,
     output: &Path,
     cancellation: &CancellationToken,
+    progress: impl FnMut(&str),
+) -> Result<OptimisationResult, AppError> {
+    optimise_pdf_scale_with_pdfium(path, scale_percent, output, cancellation, None, progress)
+}
+
+pub fn optimise_pdf_scale_with_pdfium(
+    path: &Path,
+    scale_percent: u8,
+    output: &Path,
+    cancellation: &CancellationToken,
+    pdfium_library: Option<&Path>,
     mut progress: impl FnMut(&str),
 ) -> Result<OptimisationResult, AppError> {
     validate_pdf_path(path)?;
@@ -305,6 +363,36 @@ pub fn optimise_pdf_scale_with_options(
             AppErrorCode::OutputExists,
             "The selected output file already exists.",
         ));
+    }
+    let inspection = inspect(path).map_err(map_inspection_error)?;
+    let resolution = detect_document_resolution(&inspection);
+    progress("optimising");
+    match flatten_pages_preserve_foreground_text_for_scale(
+        path,
+        output,
+        false,
+        pdfium_library,
+        scale_percent,
+    ) {
+        Ok(report) => {
+            if cancellation.is_cancelled() {
+                let _ = fs::remove_file(output);
+                return Err(simple_error(
+                    AppErrorCode::Cancelled,
+                    "Optimisation was cancelled.",
+                ));
+            }
+            let mut result = result_from_flatten_report(report)?;
+            result.mode = format!("scale_{scale_percent}");
+            result.scale_percent = Some(scale_percent);
+            result.page_budgets = resolution.pages;
+            return Ok(result);
+        }
+        Err(FlattenError::HybridUnavailable(_)) => {
+            // Vector-only or structurally inseparable pages retain the existing
+            // conservative native-resource path.
+        }
+        Err(error) => return Err(map_flatten_error(error)),
     }
     let report = export_for_scale(
         path,

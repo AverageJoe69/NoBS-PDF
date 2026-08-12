@@ -3,12 +3,70 @@ use std::{path::PathBuf, sync::Mutex};
 use pdfdoctor::app::{
     self, AppError, CancellationToken, DocumentSummary, OptimisationEstimate, OptimisationResult,
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 mod licensing;
 use licensing::LicenceStatus;
 
 struct OptimisationState(Mutex<CancellationToken>);
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateStatus {
+    current_version: String,
+    latest_version: String,
+    update_available: bool,
+    download_page: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicReleaseConfig {
+    release_version: String,
+}
+
+#[tauri::command]
+async fn check_for_updates() -> Result<UpdateStatus, AppError> {
+    let base = option_env!("NOBS_LICENSE_API_URL").unwrap_or("https://nobs-pdf.com");
+    let response = reqwest::Client::new()
+        .get(format!("{}/api/config", base.trim_end_matches('/')))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(update_error)?;
+    if !response.status().is_success() {
+        return Err(update_error(format!("HTTP {}", response.status())));
+    }
+    let release = response
+        .json::<PublicReleaseConfig>()
+        .await
+        .map_err(update_error)?;
+    let current = env!("CARGO_PKG_VERSION");
+    Ok(UpdateStatus {
+        current_version: current.into(),
+        update_available: version_tuple(&release.release_version) > version_tuple(current),
+        latest_version: release.release_version,
+        download_page: base.into(),
+    })
+}
+
+fn version_tuple(version: &str) -> (u64, u64, u64) {
+    let mut parts = version.split('.').map(|part| part.parse().unwrap_or(0));
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    )
+}
+
+fn update_error(error: impl std::fmt::Display) -> AppError {
+    AppError {
+        code: app::AppErrorCode::OptimisationFailed,
+        message: "NoBS PDF could not check for updates. Check your connection and try again."
+            .into(),
+        detail: cfg!(debug_assertions).then(|| error.to_string()),
+    }
+}
 
 #[tauri::command]
 async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
@@ -21,9 +79,11 @@ async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
 #[tauri::command]
 async fn estimate_pdf(path: String, scale_percent: u8) -> Result<OptimisationEstimate, AppError> {
     require_licence()?;
-    tauri::async_runtime::spawn_blocking(move || app::estimate_pdf_scale(&PathBuf::from(path), scale_percent))
-        .await
-        .map_err(join_error)?
+    tauri::async_runtime::spawn_blocking(move || {
+        app::estimate_pdf_scale(&PathBuf::from(path), scale_percent)
+    })
+    .await
+    .map_err(join_error)?
 }
 
 #[tauri::command]
@@ -35,14 +95,16 @@ async fn optimise_pdf(
     output_path: String,
 ) -> Result<OptimisationResult, AppError> {
     require_licence()?;
+    let pdfium_library = packaged_pdfium_path(&app_handle)?;
     let token = CancellationToken::default();
     *state.0.lock().expect("optimisation state poisoned") = token.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        app::optimise_pdf_scale_with_options(
+        app::optimise_pdf_scale_with_pdfium(
             &PathBuf::from(path),
             scale_percent,
             &PathBuf::from(output_path),
             &token,
+            Some(&pdfium_library),
             |stage| {
                 let _ = app_handle.emit("optimisation-stage", stage);
             },
@@ -50,6 +112,32 @@ async fn optimise_pdf(
     })
     .await
     .map_err(join_error)?
+}
+
+fn packaged_pdfium_path(app_handle: &AppHandle) -> Result<PathBuf, AppError> {
+    let resource_dir = app_handle.path().resource_dir().map_err(|error| AppError {
+        code: app::AppErrorCode::OptimisationFailed,
+        message: "NoBS PDF could not locate its PDF rendering component.".into(),
+        detail: cfg!(debug_assertions).then(|| error.to_string()),
+    })?;
+    pdfium_path_in(&resource_dir)
+}
+
+fn pdfium_path_in(resource_dir: &std::path::Path) -> Result<PathBuf, AppError> {
+    let filename = if cfg!(target_os = "windows") {
+        "pdfium.dll"
+    } else {
+        "libpdfium.dylib"
+    };
+    let path = resource_dir.join(filename);
+    if !path.is_file() {
+        return Err(AppError {
+            code: app::AppErrorCode::OptimisationFailed,
+            message: "NoBS PDF could not locate its PDF rendering component.".into(),
+            detail: cfg!(debug_assertions).then(|| format!("missing {}", path.display())),
+        });
+    }
+    Ok(path)
 }
 
 #[tauri::command]
@@ -111,7 +199,8 @@ pub fn run() {
             get_licence_status,
             activate_licence,
             revalidate_licence,
-            deactivate_licence
+            deactivate_licence,
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("error while running NoBS PDF");
@@ -119,6 +208,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod licensing_boundary_tests {
+    use std::fs;
+
     #[test]
     fn pdf_commands_only_use_the_local_licence_gate() {
         let source = include_str!("lib.rs");
@@ -149,5 +240,25 @@ mod licensing_boundary_tests {
             assert!(!body.contains("api/license"));
             assert!(!body.contains("reqwest"));
         }
+    }
+
+    #[test]
+    fn packaged_pdfium_is_resolved_from_the_runtime_resource_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let filename = if cfg!(target_os = "windows") {
+            "pdfium.dll"
+        } else {
+            "libpdfium.dylib"
+        };
+        let expected = directory.path().join(filename);
+        fs::write(&expected, b"test library").unwrap();
+        assert_eq!(super::pdfium_path_in(directory.path()).unwrap(), expected);
+    }
+
+    #[test]
+    fn update_versions_are_compared_numerically() {
+        assert!(super::version_tuple("1.1.0") > super::version_tuple("1.0.9"));
+        assert!(super::version_tuple("2.0.0") > super::version_tuple("1.99.99"));
+        assert_eq!(super::version_tuple("1.0.0"), (1, 0, 0));
     }
 }

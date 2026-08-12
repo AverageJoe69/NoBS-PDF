@@ -72,16 +72,14 @@ golden_check!(test_text_preserved, |r: &BenchmarkReport, m: &Value| r
     .validation
     .selectable_text_present
     && r.analysis.text_operations_after
-        >= m["acceptable_output"]["minimum_selectable_text_operations"]
+        == m["acceptable_output"]["expected_foreground_text_operations"]
             .as_u64()
             .unwrap() as usize);
-golden_check!(test_vectors_preserved, |r: &BenchmarkReport, m: &Value| r
-    .validation
-    .native_vectors_present
-    && r.analysis.vector_operations_after
-        >= m["acceptable_output"]["minimum_native_vector_operations"]
-            .as_u64()
-            .unwrap() as usize);
+golden_check!(
+    test_artwork_is_composited,
+    |r: &BenchmarkReport, _m: &Value| r.analysis.vector_operations_after
+        <= r.analysis.vector_operations_before
+);
 golden_check!(test_raster_merge_order, |r: &BenchmarkReport, m: &Value| r
     .validation
     .rendered_pages

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   AppError,
   DocumentSummary,
@@ -11,6 +11,7 @@ import type {
   Result,
   Stage,
   LicenceStatus,
+  UpdateStatus,
 } from "./types";
 
 const stages: Stage[] = [
@@ -231,7 +232,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
             </div>
             <div className="rule" />
             <SizeControl document={document} scale={scale} onChange={setScale} />
-            <div className="lock">⌁ <span>Text, graphics and page layout stay sharp and unchanged</span><b>LOCKED</b></div>
+            <div className="lock">⌁ <span>Foreground text stays native; artwork and page layout are preserved</span><b>LOCKED</b></div>
             {estimate && (
               <div className="estimate">
                 <Metric
@@ -404,6 +405,8 @@ function ActivationScreen({ status, onActivated }: { status: LicenceStatus; onAc
 function LicenceSettings({ status, onClose, onDeactivated }: { status: LicenceStatus; onClose: () => void; onDeactivated: (status: LicenceStatus) => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
   async function deactivate() {
     if (submitting) return;
     setSubmitting(true);
@@ -411,11 +414,26 @@ function LicenceSettings({ status, onClose, onDeactivated }: { status: LicenceSt
     setSubmitting(false);
     if (next.state === "NOT_ACTIVATED") onDeactivated(next); else setMessage(next.message ?? "This device could not be deactivated.");
   }
+  async function checkForUpdates() {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    setMessage("");
+    try {
+      const next = await invoke<UpdateStatus>("check_for_updates");
+      setUpdate(next);
+    } catch (value) {
+      setUpdate(null);
+      setMessage((value as AppError).message);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
   return <main className="activationPage"><Brand /><section className="activationCard licenceSettings">
     <p className="eyebrow">SETTINGS · LICENCE</p><h1>Licence</h1>
     <dl><div><dt>Licence</dt><dd>{status.licenceKey}</dd></div><div><dt>Status</dt><dd className="activeStatus">● Active</dd></div><div><dt>Device</dt><dd>{status.deviceName}</dd></div></dl>
     {message && <div className="licenceMessage errorMessage" role="alert">{message}</div>}
-    <div className="licenceActions"><button className="primary" disabled={submitting} onClick={() => void deactivate()}>{submitting ? "Deactivating…" : "Deactivate"}</button><button onClick={onClose}>Done</button></div>
+    {update && <div className="licenceMessage" role="status">{update.updateAvailable ? `NoBS PDF ${update.latestVersion} is available.` : `You’re up to date · ${update.currentVersion}`}{update.updateAvailable && <button className="link" onClick={() => void openUrl(update.downloadPage)}>Get update ↗</button>}</div>}
+    <div className="licenceActions"><button className="primary" disabled={submitting} onClick={() => void deactivate()}>{submitting ? "Deactivating…" : "Deactivate"}</button><button disabled={checkingUpdate} onClick={() => void checkForUpdates()}>{checkingUpdate ? "Checking…" : "Check for updates"}</button><button onClick={onClose}>Done</button></div>
     <small>Deactivating this device frees an activation slot. An internet connection is required.</small>
   </section></main>;
 }

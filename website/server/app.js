@@ -240,6 +240,7 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
         productName: product && !product.deleted ? product.name : "NoBS PDF",
         currency: price.currency,
         unitAmount: price.unit_amount,
+        releaseVersion: config.releaseVersion,
         releases: config.releases,
       });
     } catch {

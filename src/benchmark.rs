@@ -8,7 +8,7 @@ use tempfile::Builder;
 use thiserror::Error;
 
 use crate::{
-    flatten_pages::{flatten_pages_preserve_text, FlattenError},
+    flatten_pages::{flatten_pages_preserve_text, FlattenError, FlattenPageReport},
     inspect, InspectionError,
 };
 
@@ -35,6 +35,7 @@ pub struct BenchmarkReport {
     pub output: BenchmarkOutput,
     pub operations: BenchmarkOperations,
     pub validation: BenchmarkValidation,
+    pub pages: Vec<FlattenPageReport>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,6 +129,11 @@ pub fn run_1080p(
         let output_smaller = output_size < before.file.size_bytes;
         let selectable_text_present = text_after > 0;
         let native_vectors_present = vectors_after > 0;
+        let classified_foreground_text = flatten
+            .pages
+            .iter()
+            .map(|page| page.text_operations_above_boundary)
+            .sum::<usize>();
         let aspect_ratios = before.pages.iter().zip(&after.pages).all(|(a, b)| {
             let lhs = a.width_pt * b.height_pt;
             let rhs = a.height_pt * b.width_pt;
@@ -137,7 +143,7 @@ pub fn run_1080p(
             && output_non_zero
             && output_smaller
             && selectable_text_present
-            && native_vectors_present
+            && text_after == classified_foreground_text
             && aspect_ratios;
         Ok(BenchmarkReport {
             schema_version: "1.0.0".into(),
@@ -188,6 +194,7 @@ pub fn run_1080p(
                 rendered_pages: structural.render_comparison_passed,
                 maximum_mean_render_error: structural.maximum_mean_render_error,
             },
+            pages: flatten.pages,
         })
     })();
     let _ = fs::remove_file(&output);

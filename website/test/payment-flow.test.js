@@ -121,6 +121,25 @@ test("wrong or recurring configured Price prevents Checkout", async (t) => {
   }
 });
 
+test("public configuration exposes the current release version for manual update checks", async (t) => {
+  const { app, store } = harness(); t.after(() => store.close());
+  const response = await request(app).get("/api/config");
+  assert.equal(response.status, 200);
+  assert.equal(response.type, "application/json");
+  assert.equal(response.body.releaseVersion, "1.0.0");
+  assert.deepEqual(response.body.releases, config.releases);
+});
+
+test("Checkout is unavailable when no platform has been released", async (t) => {
+  const unavailable = { ...config, releases: { macOS: false, Windows: false }, downloads: { macOS: "", Windows: "" } };
+  const { app, store, calls } = harness({ appConfig: unavailable }); t.after(() => store.close());
+  const response = await request(app).post("/api/checkout").send({});
+  assert.equal(response.status, 503);
+  assert.equal(response.type, "application/json");
+  assert.match(response.body.error, /coming soon/i);
+  assert.equal(calls.length, 0);
+});
+
 test("unpaid Checkout creates no licence", async (t) => {
   const session = paidSession({ payment_status: "unpaid" });
   const { app, store } = harness({ session }); t.after(() => store.close());
