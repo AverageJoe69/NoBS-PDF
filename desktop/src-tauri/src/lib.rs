@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Mutex};
 use pdfdoctor::app::{
     self, AppError, CancellationToken, DocumentSummary, OptimisationEstimate, OptimisationResult,
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 mod licensing;
 use licensing::LicenceStatus;
@@ -21,9 +21,11 @@ async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
 #[tauri::command]
 async fn estimate_pdf(path: String, scale_percent: u8) -> Result<OptimisationEstimate, AppError> {
     require_licence()?;
-    tauri::async_runtime::spawn_blocking(move || app::estimate_pdf_scale(&PathBuf::from(path), scale_percent))
-        .await
-        .map_err(join_error)?
+    tauri::async_runtime::spawn_blocking(move || {
+        app::estimate_pdf_scale(&PathBuf::from(path), scale_percent)
+    })
+    .await
+    .map_err(join_error)?
 }
 
 #[tauri::command]
@@ -35,14 +37,16 @@ async fn optimise_pdf(
     output_path: String,
 ) -> Result<OptimisationResult, AppError> {
     require_licence()?;
+    let pdfium_library = packaged_pdfium_path(&app_handle)?;
     let token = CancellationToken::default();
     *state.0.lock().expect("optimisation state poisoned") = token.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        app::optimise_pdf_scale_with_options(
+        app::optimise_pdf_scale_with_pdfium(
             &PathBuf::from(path),
             scale_percent,
             &PathBuf::from(output_path),
             &token,
+            Some(&pdfium_library),
             |stage| {
                 let _ = app_handle.emit("optimisation-stage", stage);
             },
@@ -50,6 +54,32 @@ async fn optimise_pdf(
     })
     .await
     .map_err(join_error)?
+}
+
+fn packaged_pdfium_path(app_handle: &AppHandle) -> Result<PathBuf, AppError> {
+    let resource_dir = app_handle.path().resource_dir().map_err(|error| AppError {
+        code: app::AppErrorCode::OptimisationFailed,
+        message: "NoBS PDF could not locate its PDF rendering component.".into(),
+        detail: cfg!(debug_assertions).then(|| error.to_string()),
+    })?;
+    pdfium_path_in(&resource_dir)
+}
+
+fn pdfium_path_in(resource_dir: &std::path::Path) -> Result<PathBuf, AppError> {
+    let filename = if cfg!(target_os = "windows") {
+        "pdfium.dll"
+    } else {
+        "libpdfium.dylib"
+    };
+    let path = resource_dir.join(filename);
+    if !path.is_file() {
+        return Err(AppError {
+            code: app::AppErrorCode::OptimisationFailed,
+            message: "NoBS PDF could not locate its PDF rendering component.".into(),
+            detail: cfg!(debug_assertions).then(|| format!("missing {}", path.display())),
+        });
+    }
+    Ok(path)
 }
 
 #[tauri::command]
@@ -119,6 +149,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod licensing_boundary_tests {
+    use std::fs;
+
     #[test]
     fn pdf_commands_only_use_the_local_licence_gate() {
         let source = include_str!("lib.rs");
@@ -149,5 +181,18 @@ mod licensing_boundary_tests {
             assert!(!body.contains("api/license"));
             assert!(!body.contains("reqwest"));
         }
+    }
+
+    #[test]
+    fn packaged_pdfium_is_resolved_from_the_runtime_resource_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let filename = if cfg!(target_os = "windows") {
+            "pdfium.dll"
+        } else {
+            "libpdfium.dylib"
+        };
+        let expected = directory.path().join(filename);
+        fs::write(&expected, b"test library").unwrap();
+        assert_eq!(super::pdfium_path_in(directory.path()).unwrap(), expected);
     }
 }

@@ -231,7 +231,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
             </div>
             <div className="rule" />
             <SizeControl document={document} scale={scale} onChange={setScale} />
-            <div className="lock">⌁ <span>Text, graphics and page layout stay sharp and unchanged</span><b>LOCKED</b></div>
+            <div className="lock">⌁ <span>Foreground text stays native; artwork and page layout are preserved</span><b>LOCKED</b></div>
             {estimate && (
               <div className="estimate">
                 <Metric

@@ -267,6 +267,10 @@ fn flatten_pages_impl(
             visual_validation_passed: None,
         })
         .collect::<Vec<_>>();
+    if preserve_text {
+        let document = Document::load(input)?;
+        populate_boundary_reports(&document, &mut page_reports)?;
+    }
     let original_size = fs::metadata(input)?.len();
     if dry_run {
         return Ok(base_report(
@@ -300,13 +304,6 @@ fn flatten_pages_impl(
             let content = Content::decode(&bytes)?;
             let split =
                 split_at_flatten_boundary(&graphics_document, page_id, &content, page_number)?;
-            let report = &mut page_reports[(page_number - 1) as usize];
-            report.flatten_boundary_operation = Some(split.operation_index);
-            report.flatten_boundary_reason = Some(split.reason.clone());
-            report.text_operations_above_boundary = split.foreground_text_operations;
-            report.text_operations_below_boundary = report
-                .original_text_operations
-                .saturating_sub(split.foreground_text_operations);
             let background = split.background;
             graphics_document.change_page_content(page_id, background.encode()?)?;
         }
@@ -395,6 +392,27 @@ fn flatten_pages_impl(
         profile,
         preserve_text,
     ))
+}
+
+fn populate_boundary_reports(
+    document: &Document,
+    reports: &mut [FlattenPageReport],
+) -> Result<(), FlattenError> {
+    for (index, (page_number, page_id)) in document.get_pages().into_iter().enumerate() {
+        let bytes = document.get_page_content_with_limit(page_id, usize::MAX)?;
+        let content = Content::decode(&bytes)?;
+        let split = split_at_flatten_boundary(document, page_id, &content, page_number)?;
+        let report = reports.get_mut(index).ok_or_else(|| {
+            FlattenError::Validation("page report count does not match document".into())
+        })?;
+        report.flatten_boundary_operation = Some(split.operation_index);
+        report.flatten_boundary_reason = Some(split.reason);
+        report.text_operations_above_boundary = split.foreground_text_operations;
+        report.text_operations_below_boundary = report
+            .original_text_operations
+            .saturating_sub(split.foreground_text_operations);
+    }
+    Ok(())
 }
 
 fn render_document(
