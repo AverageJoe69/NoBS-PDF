@@ -13,6 +13,7 @@ import type {
   LicenceStatus,
   UpdateStatus,
 } from "./types";
+import { canonicalLicenceKey, formatLicenceBody } from "./licence-input";
 
 const stages: Stage[] = [
   "analysing",
@@ -366,21 +367,16 @@ function SizeControl({ document, scale, onChange }: { document: DocumentSummary;
   </section>;
 }
 
-function formatLicenceInput(value: string) {
-  let compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (compact.startsWith("NOBS")) compact = compact.slice(4);
-  compact = compact.slice(0, 16);
-  return `NOBS${compact ? `-${compact.match(/.{1,4}/g)?.join("-")}` : "-"}`;
-}
-
 function ActivationScreen({ status, onActivated }: { status: LicenceStatus; onActivated: (status: LicenceStatus) => void }) {
-  const [licenceKey, setLicenceKey] = useState(status.licenceKey ?? "NOBS-");
+  const [licenceBody, setLicenceBody] = useState(formatLicenceBody(status.licenceKey ?? ""));
   const [submitting, setSubmitting] = useState(false);
   const [response, setResponse] = useState(status);
+  const canonicalKey = canonicalLicenceKey(licenceBody);
   async function activate() {
     if (submitting) return;
+    if (!canonicalKey) return;
     setSubmitting(true);
-    const next = await invoke<LicenceStatus>("activate_licence", { licenceKey });
+    const next = await invoke<LicenceStatus>("activate_licence", { licenceKey: canonicalKey });
     setResponse(next);
     setSubmitting(false);
     if (next.state === "ACTIVE") onActivated(next);
@@ -392,11 +388,11 @@ function ActivationScreen({ status, onActivated }: { status: LicenceStatus; onAc
       <h1>Activate NoBS PDF</h1>
       <p>Enter your licence key to continue.</p>
       <label className="licenceField">
-        <span>LICENCE KEY</span>
-        <input autoFocus autoCapitalize="characters" autoCorrect="off" spellCheck={false} value={licenceKey} onChange={(event) => setLicenceKey(formatLicenceInput(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter") void activate(); }} placeholder="NOBS-____-____-____-____" />
+        <span className="licenceLabel">LICENCE KEY</span>
+        <span className="licenceInput"><b aria-hidden="true">NOBS-</b><input aria-label="Licence key" autoFocus autoCapitalize="characters" autoCorrect="off" spellCheck={false} value={licenceBody} onChange={(event) => setLicenceBody(formatLicenceBody(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter") void activate(); }} placeholder="____-____-____-____" /></span>
       </label>
       {response.state !== "NOT_ACTIVATED" && response.message && <div className={`licenceMessage ${response.state === "NETWORK_ERROR" ? "warningMessage" : "errorMessage"}`} role="alert">{response.message}</div>}
-      <button className="primary activationSubmit" disabled={submitting || licenceKey.length !== 24} onClick={() => void activate()}>{submitting ? "Verifying…" : "Activate"}</button>
+      <button className="primary activationSubmit" disabled={submitting || !canonicalKey} onClick={() => void activate()}>{submitting ? "Verifying…" : "Activate"}</button>
       <small>Already activated on this device? Restart NoBS PDF or contact support if the activation is not detected.</small>
     </section>
   </main>;
