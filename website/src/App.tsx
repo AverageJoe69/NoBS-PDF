@@ -148,7 +148,7 @@ function LocalProcessing() {
 function AppPreview({ releases }: { releases: Releases }) {
   return (
     <section className="appSection section shell">
-      <SectionIntro kicker="The desktop app" title="A proper utility. Not another upload form."><p>A focused native desktop app for {platformSummary(releases)}. macOS coming soon.</p></SectionIntro>
+      <SectionIntro kicker="The desktop app" title="A proper utility. Not another upload form."><p>A focused native desktop app for {platformSummary(releases)}.</p></SectionIntro>
       <div className="appWindow">
         <div className="titlebar"><span><i /><i /><i /></span><b>NoBS PDF</b></div>
         <div className="appBody"><Logo compact /><div className="appPanel">
@@ -196,7 +196,7 @@ const baseFaqs = [
 
 function FAQ({ releases }: { releases: Releases }) {
   const [open, setOpen] = useState<number | null>(0);
-  const faqs = [...baseFaqs, ["Which platforms are available?", `NoBS PDF is available for ${platformSummary(releases)}. The macOS release is coming soon.`] as const];
+  const faqs = [...baseFaqs, ["Which platforms are available?", `NoBS PDF is available for ${platformSummary(releases)}.`] as const];
   return <section className="faq section shell"><SectionIntro kicker="Questions, answered" title="Frequently asked. Plainly answered." /><div className="faqList">{faqs.map(([q, a], i) => <div className="faqItem" key={q}><button aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}><span>{q}</span><i>{open === i ? "−" : "+"}</i></button>{open === i && <p>{a}</p>}</div>)}</div></section>;
 }
 
