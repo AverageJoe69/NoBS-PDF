@@ -15,3 +15,4 @@ website/dist/
 !tests/fixtures/*.pdf
 !tests/MT_AngelRaise_01.pdf
 /vendor/pdfium/
+/release-artifacts/
