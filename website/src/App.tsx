@@ -67,7 +67,7 @@ function Hero({ releases }: { releases: Releases }) {
         <h1>Smaller PDFs.<br /><span>Without the bullshit.</span></h1>
         <p className="lede">Intelligent PDF optimisation that actually understands what’s inside your document.</p>
         <div className="heroActions"><BuyButton available={releases.macOS || releases.Windows} /><a className="button buttonText" href="#how">See how it works <span>↓</span></a></div>
-        <p className="platforms">Available for {platformSummary(releases)} · macOS coming soon · Processes locally</p>
+        <p className="platforms">Available for {platformSummary(releases)} · Processes locally</p>
       </div>
       <div className="heroObject" aria-label="NoBS PDF application icon">
         <div className="iconField"><img src="/brand/nobs-app-icon.svg" alt="NoBS PDF" /></div>
