@@ -99,23 +99,23 @@ jobs:
           Start-Sleep -Seconds 8
           if ($app.HasExited) { throw "Installed application exited unexpectedly with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id -Force
-          Move-Item $installer.FullName (Join-Path $folder "NoBS-PDF-1.0.0-Windows-x64-setup.exe")
+          Move-Item $installer.FullName (Join-Path $folder "NoBS-PDF-1.0.1-Windows-x64-setup.exe")
 
       - name: Record installer checksum
         shell: pwsh
         run: |
-          $path = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis\NoBS-PDF-1.0.0-Windows-x64-setup.exe"
+          $path = "desktop\src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis\NoBS-PDF-1.0.1-Windows-x64-setup.exe"
           $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  NoBS-PDF-1.0.0-Windows-x64-setup.exe" | Out-File "$path.sha256" -Encoding ascii
+          "$hash  NoBS-PDF-1.0.1-Windows-x64-setup.exe" | Out-File "$path.sha256" -Encoding ascii
           Write-Host "Installer SHA-256: $hash"
           Write-Host "Installer bytes: $((Get-Item $path).Length)"
 
       - name: Upload unsigned Windows RC artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoBS-PDF-1.0.0-Windows-x64-unsigned
+          name: NoBS-PDF-1.0.1-Windows-x64-unsigned
           path: |
-            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe
-            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.0-Windows-x64-setup.exe.sha256
+            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.1-Windows-x64-setup.exe
+            desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/NoBS-PDF-1.0.1-Windows-x64-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14

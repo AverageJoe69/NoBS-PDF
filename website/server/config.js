@@ -1,7 +1,7 @@
 import path from "node:path";
 
 const required = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "APP_BASE_URL"];
-const RELEASE_VERSION = "1.0.0";
+const RELEASE_VERSION = "1.0.1";
 
 export function loadConfig(env = process.env) {
   const missing = required.filter((name) => !env[name]?.trim());

@@ -48,6 +48,19 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState<Stage | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<UpdateStatus | null>(null);
+  useEffect(() => {
+    let active = true;
+    void invoke<UpdateStatus>("check_for_updates")
+      .then((update) => {
+        if (active && update.updateAvailable) setAvailableUpdate(update);
+      })
+      .catch(() => {
+        // Update checks are advisory. Offline/server failures must never block
+        // launch, licensing, or local PDF processing.
+      });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     const unlisten = getCurrentWebviewWindow().onDragDropEvent((event) => {
       if (event.payload.type === "over") {
@@ -210,6 +223,13 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   }
   return (
     <main>
+      {availableUpdate && (
+        <div className="updatePrompt" role="dialog" aria-labelledby="update-title">
+          <div><span className="eyebrow">UPDATE AVAILABLE</span><strong id="update-title">NoBS PDF {availableUpdate.latestVersion}</strong><small>You can keep working, or download the latest version now.</small></div>
+          <button className="primary" onClick={() => void openUrl(availableUpdate.downloadPage)}>Download update</button>
+          <button className="quiet" aria-label="Dismiss update" onClick={() => setAvailableUpdate(null)}>Not now</button>
+        </div>
+      )}
       <Brand onManageLicence={onManageLicence} />
       <section className="panel">
         {!document ? (

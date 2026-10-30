@@ -3,7 +3,7 @@ set -euo pipefail
 
 PDFIUM_SHA256='fbdec47c3f2eaa80705ed25cf8bed5ac420998ba0f3e786d4d297b6238749064'
 TARGET='aarch64-apple-darwin'
-DMG_NAME='NoBS-PDF-1.0.0-macOS-arm64.dmg'
+DMG_NAME='NoBS-PDF-1.0.1-macOS-arm64.dmg'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"

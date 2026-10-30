@@ -39,6 +39,23 @@ main {
   margin: 0 auto;
   padding: 52px 0 30px;
 }
+.updatePrompt {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  margin: -20px 0 28px;
+  padding: 14px 16px;
+  border: 1px solid rgba(85, 107, 77, 0.18);
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--ink);
+}
+.updatePrompt > div { display: flex; flex-direction: column; gap: 4px; }
+.updatePrompt .eyebrow { margin: 0; color: var(--green-deep); font-size: 8px; }
+.updatePrompt strong { font-size: 14px; }
+.updatePrompt small { color: var(--muted); font-size: 11px; }
+.updatePrompt .primary { padding: 10px 14px; }
 
 header {
   position: relative;

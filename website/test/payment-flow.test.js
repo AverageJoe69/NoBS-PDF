@@ -17,10 +17,10 @@ const config = {
   stripeWebhookSecret: signingSecret,
   stripePriceId: "price_nobs_test",
   appBaseUrl: "http://localhost:4173",
-  releaseVersion: "1.0.0",
+  releaseVersion: "1.0.1",
   activationLimit: 2,
   releases: { macOS: false, Windows: true },
-  downloads: { macOS: "", Windows: "https://downloads.example.test/1.0.0/nobs.exe" },
+  downloads: { macOS: "", Windows: "https://downloads.example.test/1.0.1/nobs.exe" },
 };
 
 function perpetualPrice(overrides = {}) {
@@ -63,13 +63,13 @@ function seedLicence(store, suffix = "seed") {
     customerEmail: "buyer@example.com", stripeCustomerId: "cus_test",
     checkoutSessionId: `cs_test_${suffix}12345678`, paymentIntentId: `pi_${suffix}`,
     productId: "prod_nobs_test", priceId: "price_nobs_test",
-    purchaseTimestamp: new Date().toISOString(), releaseVersion: "1.0.0",
+    purchaseTimestamp: new Date().toISOString(), releaseVersion: "1.0.1",
   });
   return result.purchase.licence_key;
 }
 
 function activationBody(key, device = "00000000-0000-4000-8000-000000000001") {
-  return { license_key: key, device_identifier: device, app_version: "1.0.0", platform: "windows" };
+  return { license_key: key, device_identifier: device, app_version: "1.0.1", platform: "windows" };
 }
 
 function signedWebhook(type, object, eventId) {
@@ -88,7 +88,7 @@ test("configuration safety rules remain enforced", () => {
   assert.throws(() => loadConfig({
     NODE_ENV: "production", STRIPE_SECRET_KEY: "sk_test_wrong", STRIPE_WEBHOOK_SECRET: "whsec_test",
     STRIPE_PRICE_ID: "price_live", APP_BASE_URL: "http://localhost", DATABASE_PATH: "/tmp/nobs.sqlite",
-    NOBS_RELEASE_VERSION: "1.0.0", MACOS_RELEASE_ENABLED: "false", WINDOWS_RELEASE_ENABLED: "false",
+    NOBS_RELEASE_VERSION: "1.0.1", MACOS_RELEASE_ENABLED: "false", WINDOWS_RELEASE_ENABLED: "false",
   }), /Unsafe production configuration/);
 });
 
@@ -127,7 +127,7 @@ test("public configuration exposes the current release version for manual update
   const response = await request(app).get("/api/config");
   assert.equal(response.status, 200);
   assert.equal(response.type, "application/json");
-  assert.equal(response.body.releaseVersion, "1.0.0");
+  assert.equal(response.body.releaseVersion, "1.0.1");
   assert.deepEqual(response.body.releases, config.releases);
 });
 
@@ -244,13 +244,13 @@ test("legacy paid subscription-era purchase migrates to perpetual ACTIVE without
     purchase_timestamp,release_version,created_at,updated_at,payment_status,licence_status,stripe_subscription_id,
     subscription_status,current_period_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run("NOBS-AAAA-BBBB-CCCC-DDDD", "legacy@example.com", "cs_live_legacy123", "prod_nobs", "price_old_yearly",
-      now, "1.0.0", now, now, "paid", "active", "sub_legacy", "active", "2000-01-01T00:00:00.000Z");
+      now, "1.0.1", now, now, "paid", "active", "sub_legacy", "active", "2000-01-01T00:00:00.000Z");
   db.close();
   const store = createStore(filename);
   t.after(() => { store.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   const purchase = store.findPurchaseBySession("cs_live_legacy123");
   assert.equal(purchase.entitlement_type, "perpetual");
-  const activation = store.activateLicence({ licenceKey: purchase.licence_key, deviceIdentifier: "00000000-0000-4000-8000-000000000001", appVersion: "1.0.0", platform: "windows", limit: 2 });
+  const activation = store.activateLicence({ licenceKey: purchase.licence_key, deviceIdentifier: "00000000-0000-4000-8000-000000000001", appVersion: "1.0.1", platform: "windows", limit: 2 });
   assert.equal(activation.state, "ACTIVE");
 });
 
