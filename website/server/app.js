@@ -249,6 +249,17 @@ export function createApp({ stripe, store, config, logger = noOpLogger }) {
     }
   });
 
+  app.get("/api/download/latest/:platform", (req, res) => {
+    const platform = String(req.params.platform || "").toLowerCase();
+    const download = platform === "windows"
+      ? config.downloads.Windows
+      : platform === "mac" || platform === "macos"
+        ? config.downloads.macOS
+        : "";
+    if (!download) return res.status(404).json({ error: "That desktop build is not available." });
+    return res.redirect(302, download);
+  });
+
   app.post("/api/checkout", async (_req, res) => {
     if (!config.releases.macOS && !config.releases.Windows) {
       return res.status(503).json({ error: "NoBS PDF is coming soon. Checkout is not available yet." });

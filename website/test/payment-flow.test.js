@@ -131,6 +131,27 @@ test("public configuration exposes the current release version for manual update
   assert.deepEqual(response.body.releases, config.releases);
 });
 
+test("public latest-download routes redirect existing customers to configured release assets", async (t) => {
+  const available = {
+    ...config,
+    releases: { macOS: true, Windows: true },
+    downloads: {
+      macOS: "https://downloads.example.test/1.0.1/nobs.dmg",
+      Windows: "https://downloads.example.test/1.0.1/nobs.exe",
+    },
+  };
+  const { app, store } = harness({ appConfig: available }); t.after(() => store.close());
+  const windows = await request(app).get("/api/download/latest/windows");
+  const mac = await request(app).get("/api/download/latest/mac");
+  const unknown = await request(app).get("/api/download/latest/linux");
+  assert.equal(windows.status, 302);
+  assert.equal(windows.headers.location, available.downloads.Windows);
+  assert.equal(mac.status, 302);
+  assert.equal(mac.headers.location, available.downloads.macOS);
+  assert.equal(unknown.status, 404);
+  assert.equal(unknown.type, "application/json");
+});
+
 test("Checkout is unavailable when no platform has been released", async (t) => {
   const unavailable = { ...config, releases: { macOS: false, Windows: false }, downloads: { macOS: "", Windows: "" } };
   const { app, store, calls } = harness({ appConfig: unavailable }); t.after(() => store.close());

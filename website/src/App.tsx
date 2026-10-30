@@ -48,7 +48,7 @@ function Header({ releases }: { releases: Releases }) {
     <header className="siteHeader shell">
       <Logo />
       <nav aria-label="Main navigation">
-        <a href="#how">How it works</a><a href="#proof">Proof</a><a href="#pricing">Pricing</a>
+        <a href="#how">How it works</a><a href="#proof">Proof</a><a href="#pricing">Pricing</a><a href="#downloads">Downloads</a>
       </nav>
       <BuyButton available={releases.macOS || releases.Windows} className="headerBuy" />
     </header>
@@ -184,6 +184,19 @@ function Pricing({ releases }: { releases: Releases }) {
   );
 }
 
+function Downloads({ releases }: { releases: Releases }) {
+  return <section className="downloads section shell" id="downloads">
+    <SectionIntro kicker="Already own NoBS PDF?" title="Download the latest version.">
+      <p>Install the current release, then activate it with your existing licence key. You do not need to purchase again.</p>
+    </SectionIntro>
+    <div className="downloadButtons">
+      {releases.Windows && <a className="button buttonPrimary" href="/api/download/latest/windows">Download for Windows</a>}
+      {releases.macOS && <a className="button buttonPrimary" href="/api/download/latest/mac">Download for Mac</a>}
+    </div>
+    <small>Windows x64 · macOS Apple Silicon</small>
+  </section>;
+}
+
 const baseFaqs = [
   ["What does NoBS actually do?", "It analyses raster objects inside a PDF and optimises them according to how they are placed and used, while preserving document structure wherever supported."],
   ["Does it change image quality?", "It intentionally changes raster resolution and encoding where appropriate. The goal is excellent visual quality at a dramatically smaller size—not lossless compression."],
@@ -244,7 +257,7 @@ function Home() {
       if (typeof data.releases?.macOS === "boolean" && typeof data.releases?.Windows === "boolean") setReleases(data.releases);
     }).catch(() => undefined);
   }, []);
-  return <><Header releases={releases} /><main><Hero releases={releases} /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview releases={releases} /><Pricing releases={releases} /><FAQ releases={releases} /><FinalCTA releases={releases} /></main><Footer /></>;
+  return <><Header releases={releases} /><main><Hero releases={releases} /><Benchmark /><Problem /><HowItWorks /><Structure /><LocalProcessing /><AppPreview releases={releases} /><Pricing releases={releases} /><Downloads releases={releases} /><FAQ releases={releases} /><FinalCTA releases={releases} /></main><Footer /></>;
 }
 
 export default function App() {
