@@ -210,6 +210,48 @@ pub fn flatten_pages_preserve_foreground_text_for_scale(
     )
 }
 
+/// Export every page as a single raster layer using the same detected raster
+/// budgets as the desktop Size control. Unlike the hybrid path, this
+/// intentionally rasterises text and vector artwork as well.
+pub fn flatten_all_pages_for_scale(
+    input: &Path,
+    output: &Path,
+    dry_run: bool,
+    pdfium_library: Option<&Path>,
+    scale_percent: u8,
+) -> Result<FlattenReport, FlattenError> {
+    let inspection = inspect(input)?;
+    let resolution = detect_document_resolution(&inspection);
+    let dimensions = resolution
+        .pages
+        .iter()
+        .zip(&inspection.pages)
+        .map(|(budget, page)| {
+            let detected = budget.budget_100_percent.unwrap_or_else(|| {
+                // A page without raster evidence still needs a deterministic
+                // ceiling when the user explicitly requests full flattening.
+                // Use the approved internal physical-page ceiling; never
+                // expose this implementation detail in the UI.
+                [
+                    (page.width_pt.max(1.0) / 72.0 * 300.0).round() as u32,
+                    (page.height_pt.max(1.0) / 72.0 * 300.0).round() as u32,
+                ]
+            });
+            Ok(scale_dimensions(detected, scale_percent))
+        })
+        .collect::<Result<Vec<_>, FlattenError>>()?;
+    flatten_pages_impl(
+        input,
+        output,
+        dry_run,
+        pdfium_library,
+        dimensions.iter().map(|d| d[0].max(d[1])).max().unwrap_or(0),
+        &format!("flatten_scale_{scale_percent}"),
+        false,
+        Some(dimensions),
+    )
+}
+
 fn flatten_pages_impl(
     input: &Path,
     output: &Path,

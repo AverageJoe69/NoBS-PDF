@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     exporter::{export_for_scale, export_for_target, ExportOptions, ExportReport},
     flatten_pages::{
-        flatten_pages, flatten_pages_preserve_foreground_text_for_scale,
-        flatten_pages_preserve_text, FlattenError, FlattenReport,
+        flatten_all_pages_for_scale, flatten_pages,
+        flatten_pages_preserve_foreground_text_for_scale, flatten_pages_preserve_text,
+        FlattenError, FlattenReport,
     },
     inspect,
     resolution::{detect_document_resolution, DocumentResolution, PageRasterBudget},
@@ -206,17 +207,30 @@ pub fn estimate_pdf_scale(
     path: &Path,
     scale_percent: u8,
 ) -> Result<OptimisationEstimate, AppError> {
+    estimate_pdf_scale_with_flatten(path, scale_percent, false)
+}
+
+pub fn estimate_pdf_scale_with_flatten(
+    path: &Path,
+    scale_percent: u8,
+    flatten_all: bool,
+) -> Result<OptimisationEstimate, AppError> {
     validate_pdf_path(path)?;
     let inspection = inspect(path).map_err(map_inspection_error)?;
     let resolution = detect_document_resolution(&inspection);
     let placeholder = default_output_path(path, &format!("{scale_percent}pct"));
-    match flatten_pages_preserve_foreground_text_for_scale(
-        path,
-        &placeholder,
-        true,
-        None,
-        scale_percent,
-    ) {
+    let flattened = if flatten_all {
+        flatten_all_pages_for_scale(path, &placeholder, true, None, scale_percent)
+    } else {
+        flatten_pages_preserve_foreground_text_for_scale(
+            path,
+            &placeholder,
+            true,
+            None,
+            scale_percent,
+        )
+    };
+    match flattened {
         Ok(hybrid) => {
             // Quality-90 page artwork averages about 0.38 encoded bytes per
             // raster pixel across the golden deck. Add a small allowance for
@@ -242,7 +256,11 @@ pub fn estimate_pdf_scale(
                 ),
                 candidate_images: hybrid.pages.len(),
                 skipped_images: 0,
-                profile: format!("scale_{scale_percent}"),
+                profile: if flatten_all {
+                    format!("flatten_scale_{scale_percent}")
+                } else {
+                    format!("scale_{scale_percent}")
+                },
                 document_long_dimension_px: None,
                 bloated_images: vec![],
                 scale_percent: Some(scale_percent),
@@ -333,6 +351,26 @@ pub fn optimise_pdf_scale_with_pdfium(
     output: &Path,
     cancellation: &CancellationToken,
     pdfium_library: Option<&Path>,
+    progress: impl FnMut(&str),
+) -> Result<OptimisationResult, AppError> {
+    optimise_pdf_scale_with_flatten(
+        path,
+        scale_percent,
+        output,
+        cancellation,
+        pdfium_library,
+        false,
+        progress,
+    )
+}
+
+pub fn optimise_pdf_scale_with_flatten(
+    path: &Path,
+    scale_percent: u8,
+    output: &Path,
+    cancellation: &CancellationToken,
+    pdfium_library: Option<&Path>,
+    flatten_all: bool,
     mut progress: impl FnMut(&str),
 ) -> Result<OptimisationResult, AppError> {
     validate_pdf_path(path)?;
@@ -367,13 +405,18 @@ pub fn optimise_pdf_scale_with_pdfium(
     let inspection = inspect(path).map_err(map_inspection_error)?;
     let resolution = detect_document_resolution(&inspection);
     progress("optimising");
-    match flatten_pages_preserve_foreground_text_for_scale(
-        path,
-        output,
-        false,
-        pdfium_library,
-        scale_percent,
-    ) {
+    let flattened = if flatten_all {
+        flatten_all_pages_for_scale(path, output, false, pdfium_library, scale_percent)
+    } else {
+        flatten_pages_preserve_foreground_text_for_scale(
+            path,
+            output,
+            false,
+            pdfium_library,
+            scale_percent,
+        )
+    };
+    match flattened {
         Ok(report) => {
             if cancellation.is_cancelled() {
                 let _ = fs::remove_file(output);
@@ -383,12 +426,16 @@ pub fn optimise_pdf_scale_with_pdfium(
                 ));
             }
             let mut result = result_from_flatten_report(report)?;
-            result.mode = format!("scale_{scale_percent}");
+            result.mode = if flatten_all {
+                format!("flatten_scale_{scale_percent}")
+            } else {
+                format!("scale_{scale_percent}")
+            };
             result.scale_percent = Some(scale_percent);
             result.page_budgets = resolution.pages;
             return Ok(result);
         }
-        Err(FlattenError::HybridUnavailable(_)) => {
+        Err(FlattenError::HybridUnavailable(_)) if !flatten_all => {
             // Vector-only or structurally inseparable pages retain the existing
             // conservative native-resource path.
         }

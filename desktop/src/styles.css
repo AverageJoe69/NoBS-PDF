@@ -218,6 +218,8 @@ select:hover { border-color: rgba(72, 91, 55, 0.3); background-color: #f1f0e9; }
 .optionRow input:checked { border-color: var(--green); background: var(--green); }
 .optionRow input:checked::before { transform: rotate(-45deg) scale(1); }
 .optionRow.disabled { opacity: 0.5; }
+.flattenOption { margin: 3px 0 18px; padding: 15px 2px; }
+.flattenOption > div { max-width: 540px; }
 
 .lock {
   display: flex;

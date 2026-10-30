@@ -77,10 +77,14 @@ async fn inspect_pdf(path: String) -> Result<DocumentSummary, AppError> {
 }
 
 #[tauri::command]
-async fn estimate_pdf(path: String, scale_percent: u8) -> Result<OptimisationEstimate, AppError> {
+async fn estimate_pdf(
+    path: String,
+    scale_percent: u8,
+    flatten_all: bool,
+) -> Result<OptimisationEstimate, AppError> {
     require_licence()?;
     tauri::async_runtime::spawn_blocking(move || {
-        app::estimate_pdf_scale(&PathBuf::from(path), scale_percent)
+        app::estimate_pdf_scale_with_flatten(&PathBuf::from(path), scale_percent, flatten_all)
     })
     .await
     .map_err(join_error)?
@@ -92,6 +96,7 @@ async fn optimise_pdf(
     state: State<'_, OptimisationState>,
     path: String,
     scale_percent: u8,
+    flatten_all: bool,
     output_path: String,
 ) -> Result<OptimisationResult, AppError> {
     require_licence()?;
@@ -99,12 +104,13 @@ async fn optimise_pdf(
     let token = CancellationToken::default();
     *state.0.lock().expect("optimisation state poisoned") = token.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        app::optimise_pdf_scale_with_pdfium(
+        app::optimise_pdf_scale_with_flatten(
             &PathBuf::from(path),
             scale_percent,
             &PathBuf::from(output_path),
             &token,
             Some(&pdfium_library),
+            flatten_all,
             |stage| {
                 let _ = app_handle.emit("optimisation-stage", stage);
             },

@@ -41,6 +41,7 @@ const formatBytes = (value: number) =>
 function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   const [document, setDocument] = useState<DocumentSummary | null>(null);
   const [scale, setScale] = useState(100);
+  const [flattenAll, setFlattenAll] = useState(false);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<AppError | null>(null);
@@ -73,15 +74,16 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
       setError(null);
       setLoading(true);
       setStage("planning");
-      void invoke<Estimate>("estimate_pdf", { path: document.path, scalePercent: scale })
+      void invoke<Estimate>("estimate_pdf", { path: document.path, scalePercent: scale, flattenAll })
         .then(setEstimate)
         .catch((value) => setError(value as AppError))
         .finally(() => { setLoading(false); setStage(null); });
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [document, scale]);
+  }, [document, scale, flattenAll]);
   async function loadPdf(path: string) {
     setScale(100);
+    setFlattenAll(false);
     setError(null);
     setResult(null);
     setEstimate(null);
@@ -109,7 +111,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   }
   async function optimise() {
     if (!document) return;
-    const suffix = `${scale}pct`;
+    const suffix = `${flattenAll ? "Flattened_" : ""}${scale}pct`;
     const suggested = document.filename.replace(
       /\.pdf$/i,
       `_NoBS_${suffix}.pdf`,
@@ -127,6 +129,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
         await invoke<Result>("optimise_pdf", {
           path: document.path,
           scalePercent: scale,
+          flattenAll,
           outputPath: output,
         }),
       );
@@ -142,6 +145,7 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
   }
   function reset() {
     setScale(100);
+    setFlattenAll(false);
     setDocument(null);
     setEstimate(null);
     setResult(null);
@@ -149,9 +153,10 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
     setStage(null);
   }
   if (result) {
+    const fullyFlattened = result.mode.startsWith("flatten_scale_");
     const checks = [
-          ["Text preserved", result.text_preserved],
-          ["Vector artwork preserved", result.vectors_preserved],
+          [fullyFlattened ? "Every page flattened" : "Text preserved", fullyFlattened || result.text_preserved],
+          [fullyFlattened ? "Page appearance preserved" : "Vector artwork preserved", fullyFlattened || result.vectors_preserved],
           ["Aspect ratios preserved", result.aspect_ratios_preserved],
           ["Page geometry preserved", result.page_layout_preserved],
           ["PDF validated", result.validation_passed],
@@ -233,7 +238,13 @@ function MainApplication({ onManageLicence }: { onManageLicence: () => void }) {
             </div>
             <div className="rule" />
             <SizeControl document={document} scale={scale} onChange={setScale} />
-            <div className="lock">⌁ <span>Foreground text stays native; artwork and page layout are preserved</span><b>LOCKED</b></div>
+            <label className="optionRow flattenOption">
+              <div><strong>Flatten all pages</strong><span>Can make artwork-heavy PDFs smaller, but converts all text and graphics into pixels.</span></div>
+              <input type="checkbox" checked={flattenAll} onChange={(event) => setFlattenAll(event.target.checked)} />
+            </label>
+            {flattenAll
+              ? <div className="warning"><strong>All pages will be flattened</strong><span>Text will no longer be selectable or searchable. Links and other interactive page content may not remain interactive.</span></div>
+              : <div className="lock">⌁ <span>Foreground text stays native; artwork and page layout are preserved</span><b>LOCKED</b></div>}
             {estimate && (
               <div className="estimate">
                 <Metric

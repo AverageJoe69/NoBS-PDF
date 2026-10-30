@@ -202,3 +202,34 @@ fn desktop_scale_path_uses_foreground_text_hybrid_when_safe() {
     assert!(!result.vectors_preserved);
     assert!(output.exists());
 }
+
+#[test]
+fn explicit_flatten_all_scale_rasterises_text_and_vectors() {
+    let library = pdfium_library();
+    if !library.exists() {
+        return;
+    }
+    let dir = TempDir::new().unwrap();
+    let input = dir.path().join("in.pdf");
+    let output = dir.path().join("out.pdf");
+    fixture(&input);
+    let result = pdfdoctor::app::optimise_pdf_scale_with_flatten(
+        &input,
+        50,
+        &output,
+        &pdfdoctor::app::CancellationToken::default(),
+        Some(&library),
+        true,
+        |_| {},
+    )
+    .unwrap();
+    let inspected = pdfdoctor::inspect(&output).unwrap();
+    assert_eq!(result.mode, "flatten_scale_50");
+    assert_eq!(result.scale_percent, Some(50));
+    assert!(result.validation_passed);
+    assert!(!result.text_preserved);
+    assert!(!result.vectors_preserved);
+    assert_eq!(inspected.pages[0].object_counts.text_operations, 0);
+    assert_eq!(inspected.pages[0].object_counts.vector_operations, 0);
+    assert_eq!(inspected.pages[0].object_counts.image_placements, 1);
+}
